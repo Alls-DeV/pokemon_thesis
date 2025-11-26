@@ -209,7 +209,8 @@ def get_llm_player(args,
                    PASSWORD: str='', 
                    online: bool=False,
                    use_timeout: bool=True,
-                   timeout_seconds: int=90) -> Player:
+                   timeout_seconds: int=90,
+                   team_idx: int=1) -> Player:
     from pokechamp.llm_player import LLMPlayer
     from pokechamp.prompts import prompt_translate, state_translate2, state_translate3
     
@@ -353,6 +354,17 @@ def get_llm_player(args,
                        prompt_translate=state_translate3 if "vgc" in battle_format.lower() else state_translate2,
                        device=device,
                        llm_backend=llm_backend)
+    elif 'polimi' in name:
+        from polimi.polimi_bot import PolimiBot  # Lazy import to avoid circular dependency
+        return PolimiBot(battle_format=battle_format,
+            api_key=KEY,
+            backend=backend,
+            temperature=args.temperature,
+            team_idx=team_idx,
+            account_configuration=AccountConfiguration(f'{USERNAME}{PNUMBER1}', PASSWORD),
+            server_configuration=server_config,
+            device=device,
+        )
     else:
         # Try to find a custom bot in the bots folder
         custom_bot_class = get_custom_bot_class(name)

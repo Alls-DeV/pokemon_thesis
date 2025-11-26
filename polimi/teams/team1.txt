@@ -1,0 +1,60 @@
+Ribombee @ Focus Sash
+Ability: Shield Dust
+EVs: 252 SpA / 4 SpD / 252 Spe
+Tera Type: Ghost
+Timid Nature
+- Psychic Noise
+- Sticky Web
+- Moonblast
+- Stun Spore
+
+Great Tusk @ Heavy-Duty Boots
+Ability: Protosynthesis
+EVs: 252 Atk / 4 Def / 252 Spe
+Tera Type: Steel
+Jolly Nature
+- Headlong Rush
+- Ice Spinner
+- Rapid Spin
+- Close Combat
+
+Gholdengo @ Air Balloon
+Ability: Good as Gold
+Tera Type: Fairy
+EVs: 252 SpA / 4 SpD / 252 Spe
+Timid Nature
+IVs: 0 Atk
+- Nasty Plot
+- Shadow Ball
+- Make It Rain
+- Dazzling Gleam
+
+Manaphy @ Leftovers
+Ability: Hydration
+EVs: 4 Def / 252 SpA / 252 Spe
+Tera Type: Fairy
+Timid Nature
+- Tail Glow
+- Surf
+- Energy Ball
+- Alluring Voice
+
+Kingambit @ Air Balloon
+Ability: Supreme Overlord
+Tera Type: Fairy
+EVs: 252 Atk / 4 SpD / 252 Spe
+Jolly Nature
+- Swords Dance
+- Kowtow Cleave
+- Tera Blast
+- Sucker Punch
+
+Iron Valiant @ Booster Energy
+Ability: Quark Drive
+EVs: 252 SpA / 4 SpD / 252 Spe
+Tera Type: Ghost
+Timid Nature
+- Calm Mind
+- Moonblast
+- Shadow Ball
+- Encore

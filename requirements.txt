@@ -5,9 +5,9 @@ orjson
 matplotlib
 scipy
 scikit-learn
-torch
+# torch
 transformers
-accelerate
+# accelerate
 wandb
 evaluate
 datasets

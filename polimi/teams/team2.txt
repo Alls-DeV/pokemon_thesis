@@ -1,0 +1,62 @@
+Gholdengo @ Air Balloon
+Ability: Good as Gold
+EVs: 252 SpA / 4 SpD / 252 Spe
+IVs: 0 Atk
+Tera Type: Fairy
+Timid Nature
+- Nasty Plot
+- Shadow Ball
+- Make It Rain
+- Recover
+
+Darkrai @ Heavy-Duty Boots
+Ability: Bad Dreams
+Tera Type: Poison
+EVs: 252 SpA / 4 SpD / 252 Spe 
+Timid Nature
+IVs: 0 Atk
+- Dark Pulse
+- Sludge Bomb
+- Ice Beam
+- Will-O-Wisp
+
+Ting-Lu @ Leftovers
+Ability: Vessel of Ruin
+EVs: 252 HP / 4 Def / 252 SpD
+Tera Type: Poison
+Careful Nature
+- Spikes
+- Earthquake
+- Whirlwind
+- Ruination
+
+Zapdos @ Heavy-Duty Boots
+Ability: Static
+EVs: 248 HP / 244 Def / 16 Spe
+IVs: 0 Atk
+Tera Type: Steel
+Bold Nature
+- Hurricane
+- Volt Switch
+- Thunder Wave
+- Roost
+
+Primarina @ Assault Vest
+Ability: Torrent
+EVs: 80 HP / 252 SpA / 176 Spe
+Tera Type: Steel
+Modest Nature
+- Surf
+- Moonblast
+- Flip Turn
+- Psychic Noise
+
+Gliscor @ Toxic Orb
+Ability: Poison Heal
+EVs: 244 HP / 36 Def / 228 SpD
+Tera Type: Normal
+Careful Nature
+- Swords Dance
+- Facade
+- Knock Off
+- Protect
