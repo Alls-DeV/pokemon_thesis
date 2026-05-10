@@ -118,6 +118,16 @@ class PolimiBot(Player):
             )
             self.strategy_data = {}
 
+        team_json_file = f"polimi/teams_json/team{self.team_idx}.json"
+        try:
+            with open(team_json_file, "r") as f:
+                self.team_json_data = json.load(f)
+        except FileNotFoundError:
+            print(
+                f"[WARNING]: Team JSON file {team_json_file} not found, using empty dict"
+            )
+            self.team_json_data = {}
+
         # Create name mapping for common Pokemon
         self.name_mapping = {
             "slowkinggalar": "Slowking-Galar",
@@ -577,7 +587,7 @@ class PolimiBot(Player):
             #     print(f"[WARNING]: Error in enhanced prediction: {e}")
 
         # Fill remaining move slots if we have fewer than 4
-        while len(moves_info) < 4:
+        while opponent and len(moves_info) < 4:
             # TODO: if this appears with your active pokemon there are some problems
             moves_info.append(f"  * Unknown move: Move not yet revealed")
 
@@ -957,50 +967,13 @@ class PolimiBot(Player):
 
                 # Get moves
                 moves_list = []
-                # For player's team Pokemon, moves should be available from team definition
-                # Try to get from moves dict first, but also check if there are move slots
-                if hasattr(pokemon, "moves") and pokemon.moves:
-                    for move_id, move in pokemon.moves.items():
-                        if move:
-                            move_name = self.denormalize_move_name(move.id)
-                            try:
-                                move_explanation = self.move_effect[move.id]
-                                if move_explanation:
-                                    move_explanation = ": " + move_explanation
-                            except:
-                                print(
-                                    f"[WARNING]: Move '{move.id}' not found in move_effect.json"
-                                )
-                                move_explanation = ": Effect unknown"
-
-                            # Calculate turns to KO if opponent active pokemon exists
-                            ko_turns = None
-                            if battle.opponent_active_pokemon:
-                                try:
-                                    # Pass the team pokemon as the attacker to calculate damage from this pokemon
-                                    ko_result = self.turns_to_ko(
-                                        battle,
-                                        move.id,
-                                        attacker_is_opponent=False,
-                                        attacker_pokemon=pokemon,
-                                    )
-                                    if isinstance(ko_result, int):
-                                        ko_turns = ko_result
-                                except Exception:
-                                    ko_turns = None
-
-                            ko_str = (
-                                f" ({ko_turns} turns to KO opponent's pokemon)"
-                                if ko_turns is not None
-                                else ""
-                            )
-                            moves_list.append(
-                                f"    * {move_name}{move_explanation}{ko_str}"
-                            )
-                        elif move_id and isinstance(move_id, str):
-                            # Move slot exists but move object not initialized yet
-                            # This can happen before the Pokemon is sent out
-                            move_name = self.denormalize_move_name(move_id)
+                # Use team_json_data to get the full moveset for the inactive team member
+                if self.team_json_data and species in self.team_json_data:
+                    team_member_data = self.team_json_data[species]
+                    if "moves" in team_member_data:
+                        for move_name in team_member_data["moves"]:
+                            move_id = move_name.lower().replace(" ", "").replace("-", "")
+                            
                             try:
                                 move_explanation = self.move_effect[move_id]
                                 if move_explanation:
@@ -1223,7 +1196,7 @@ class PolimiBot(Player):
 
     def _get_available_moves_list(self, battle: AbstractBattle) -> str:
         available_moves_list = []
-        for move in battle.active_pokemon.moves.values():
+        for move in battle.available_moves:
             move_name = self.denormalize_move_name(move.id)
             available_moves_list.append(f"  - {move_name}")
         return (
@@ -1539,8 +1512,8 @@ Provide your response in JSON format:
             switch_response_raw,
         )
 
-        print("----- Merger Prompt -----")
-        print(merger_prompt)
+        # print("----- Merger Prompt -----")
+        # print(merger_prompt)
         # merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True)[0]
         merger_response_json = ""
 
@@ -1559,5 +1532,5 @@ Provide your response in JSON format:
             if parsed_order:
                 return parsed_order
 
-        input("miao miaoino")
+        input("[DEBUG] Press Enter to continue")
         return self.choose_random_move(battle)
