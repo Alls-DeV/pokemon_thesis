@@ -364,6 +364,7 @@ class BayesianTeamPredictor:
         nature_probs = {}
         ability_probs = {}
         ev_spread_probs = {}
+        tera_type_probs = {}
         
         for config_key, count in configs.items():
             base_prob = count / total_configs
@@ -398,6 +399,10 @@ class BayesianTeamPredictor:
                 if 'ability' in parsed and parsed['ability']:
                     ability_probs[parsed['ability']] = ability_probs.get(parsed['ability'], 0) + adjusted_prob
                 
+                # Tera Type
+                if 'tera_type' in parsed and parsed['tera_type']:
+                    tera_type_probs[parsed['tera_type']] = tera_type_probs.get(parsed['tera_type'], 0) + adjusted_prob
+                
                 # EV spreads (simplified to main stats)
                 if 'ev_spread' in parsed and parsed['ev_spread']:
                     ev_key = self._summarize_ev_spread(parsed['ev_spread'])
@@ -431,6 +436,7 @@ class BayesianTeamPredictor:
             'items': normalize_and_sort(item_probs),
             'natures': normalize_and_sort(nature_probs),
             'abilities': normalize_and_sort(ability_probs),
+            'tera_types': normalize_and_sort(tera_type_probs),
             'ev_spreads': normalize_and_sort(ev_spread_probs),
             'revealed_moves': revealed_moves
         }

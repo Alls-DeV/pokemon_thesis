@@ -539,6 +539,14 @@ class PolimiBot(Player):
                 )
                 item_name = f"{best_item}"
 
+            if (
+                "tera_types" in predictions
+                and predictions["tera_types"]
+                and tera_type == "Unknown"
+            ):
+                best_tera_type = predictions["tera_types"][0][0]
+                tera_type = f"{best_tera_type}"
+
             # Add predicted moves if we have fewer than 4 known moves
             if "moves" in predictions and predictions["moves"] and len(moves_info) < 4:
                 predicted_moves = predictions["moves"]
@@ -1139,11 +1147,10 @@ class PolimiBot(Player):
         # Opponent's terastallization status
         if battle.opponent_active_pokemon:
             if battle.opponent_active_pokemon.terastallized:
-                opp_tera_type = (
-                    battle.opponent_active_pokemon._terastallized_type.name.capitalize()
-                    if battle.opponent_active_pokemon._terastallized_type
-                    else "Unknown"
-                )
+                if hasattr(battle.opponent_active_pokemon, "_terastallized_type") and battle.opponent_active_pokemon._terastallized_type:
+                    opp_tera_type = battle.opponent_active_pokemon._terastallized_type.name.capitalize() if hasattr(battle.opponent_active_pokemon._terastallized_type, 'name') else str(battle.opponent_active_pokemon._terastallized_type).capitalize()
+                else:
+                    opp_tera_type = "Unknown"
                 tera_prompt += f"* Opponent's {self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)} is currently terastallized (Type: {opp_tera_type})\n"
             elif opponent_can_tera:
                 tera_prompt += (
