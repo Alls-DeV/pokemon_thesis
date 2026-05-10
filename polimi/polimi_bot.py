@@ -1116,6 +1116,7 @@ class PolimiBot(Player):
 
     def get_terastallization_prompt(self, battle: AbstractBattle) -> str:
         """Generate terastallization information for the prompt."""
+        # TODO: seems to assign to each pokemon "Unknown"
         tera_prompt = ""
 
         # Check if this is generation 9 and terastallization is available
@@ -1208,142 +1209,60 @@ class PolimiBot(Player):
                     pass
             raise ValueError("Could not extract valid JSON from response")
 
-    def choose_move(self, battle: AbstractBattle) -> BattleOrder:
-        # Check if LLM is available
-        # if self.llm is None:
-        #     return self.choose_random_move(battle)
-
-        # print("==============================")
-        # print(battle.active_pokemon.species, f"({len(battle.active_pokemon.moves.values())} moves)")
-        # print("\t", end='')
-        # for move in battle.active_pokemon.moves.values():
-        #     print(move.id, end='; ')
-        # print()
-        # for pok in battle.team.values():
-        #     print(pok.species, f"({len(pok.moves.values())} moves)")
-        #     print("\t", end='')
-        #     for move in pok.moves.values():
-        #         print(move.id, end='; ')
-        #     print()
-        # return self.choose_random_move(battle)
-
-        # System prompt with strategy
-        system_prompt = self.get_system_prompt(battle)
-
-        side_conditions_prompt = self.get_side_conditions_prompt(battle)
-        opponent_active_pokemon_prompt = self.get_active_pokemon_prompt(
-            battle, opponent=True, enhanced=True
+    def _get_available_switches_list(self, battle: AbstractBattle) -> str:
+        available_switches_list = []
+        for pokemon in battle.available_switches:
+            pokemon_name = self.denormalize_pokemon_name(pokemon.species)
+            hp_pct = round(pokemon.current_hp_fraction * 100, 1)
+            available_switches_list.append(f"  - {pokemon_name} (HP: {hp_pct}%)")
+        return (
+            "\n".join(available_switches_list)
+            if available_switches_list
+            else "  - No switches available"
         )
 
-        # Check if active Pokemon is fainted
-        active_pokemon_fainted = (
-            not battle.active_pokemon
-            or battle.active_pokemon.fainted
-            or self.check_status(battle.active_pokemon.status) == "fainted"
-        )
-
-        # Check if there are available switches
-        has_available_switches = bool(battle.available_switches)
-
-        # If active Pokemon is fainted and no switches available, return random move as fallback
-        if active_pokemon_fainted and not has_available_switches:
-            print("[WARNING]: Active Pokemon fainted and no switches available!")
-            return self.choose_random_move(battle)
-
-        # If active Pokemon is fainted, we must switch
-        if active_pokemon_fainted:
-            print("[INFO]: Active Pokemon is fainted, must switch")
-            player_team_prompt = self.get_player_team_prompt(battle)
-
-            available_switches_list = []
-            for pokemon in battle.available_switches:
-                pokemon_name = self.denormalize_pokemon_name(pokemon.species)
-                hp_pct = round(pokemon.current_hp_fraction * 100, 1)
-                available_switches_list.append(f"  - {pokemon_name} (HP: {hp_pct}%)")
-
-            switches_options = "\n".join(available_switches_list)
-
-            # Build switch-only prompt
-            switch_prompt = ""
-            if side_conditions_prompt:
-                switch_prompt += side_conditions_prompt + "\n"
-            switch_prompt += (
-                opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
-            )
-            switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
-            switch_prompt += """\nYour active Pokemon is fainted. You must choose a Pokemon to switch in.
-Provide your response in JSON format with the following structure:
-{
-  "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
-  "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
-}"""
-
-            print("----- Switch Prompt (Forced) -----")
-            print(switch_prompt)
-            print("----------------------------------")
-
-            # Get LLM response for forced switch
-            # switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
-            switch_response_raw = ""
-
-            # Parse and execute switch
-            try:
-                switch_data = self._extract_json(switch_response_raw)
-                chosen_pokemon_name = switch_data.get("switch", "").strip()
-
-                # Find matching pokemon
-                for pokemon in battle.available_switches:
-                    if pokemon.species.lower().replace(" ", "").replace(
-                        "-", ""
-                    ) == chosen_pokemon_name.lower().replace(" ", "").replace("-", ""):
-                        return BattleOrder(pokemon)
-
-                # If no exact match found, try fuzzy matching
-                available_switch_species = [
-                    p.species for p in battle.available_switches
-                ]
-                matches = get_close_matches(
-                    chosen_pokemon_name.lower().replace(" ", "").replace("-", ""),
-                    [
-                        s.lower().replace(" ", "").replace("-", "")
-                        for s in available_switch_species
-                    ],
-                    n=1,
-                    cutoff=0.6,
-                )
-                if matches:
-                    for pokemon in battle.available_switches:
-                        if (
-                            pokemon.species.lower().replace(" ", "").replace("-", "")
-                            == matches[0]
-                        ):
-                            return BattleOrder(pokemon)
-            except Exception as e:
-                print(f"Error parsing forced switch response: {e}")
-
-            # Fallback to random switch
-            return self.choose_random_move(battle)
-
-        # From here, active Pokemon is alive
-        player_active_pokemon_prompt = self.get_active_pokemon_prompt(
-            battle, opponent=False, enhanced=False
-        )
-        player_team_prompt = self.get_player_team_prompt(battle)
-        terastallization_prompt = self.get_terastallization_prompt(battle)
-
-        # Get available moves for explicit listing
+    def _get_available_moves_list(self, battle: AbstractBattle) -> str:
         available_moves_list = []
         for move in battle.active_pokemon.moves.values():
             move_name = self.denormalize_move_name(move.id)
             available_moves_list.append(f"  - {move_name}")
-
-        moves_options = (
+        return (
             "\n".join(available_moves_list)
             if available_moves_list
             else "  - No moves available"
         )
 
-        # Build move prompt with JSON output instructions
+    def _build_forced_switch_prompt(
+        self,
+        side_conditions_prompt: str,
+        opponent_active_pokemon_prompt: str,
+        player_team_prompt: str,
+        switches_options: str,
+    ) -> str:
+        switch_prompt = ""
+        if side_conditions_prompt:
+            switch_prompt += side_conditions_prompt + "\n"
+        switch_prompt += (
+            opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
+        )
+        switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
+        switch_prompt += """\nYour active Pokemon is fainted. You must choose a Pokemon to switch in.
+Provide your response in JSON format with the following structure:
+{
+  "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
+  "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
+}"""
+        return switch_prompt
+
+    def _build_move_prompt(
+        self,
+        battle: AbstractBattle,
+        side_conditions_prompt: str,
+        player_active_pokemon_prompt: str,
+        opponent_active_pokemon_prompt: str,
+        terastallization_prompt: str,
+        moves_options: str,
+    ) -> str:
         move_prompt = ""
         if side_conditions_prompt:
             move_prompt += side_conditions_prompt + "\n"
@@ -1354,7 +1273,6 @@ Provide your response in JSON format with the following structure:
             move_prompt += terastallization_prompt + "\n"
         move_prompt += f"\nAvailable moves:\n{moves_options}\n"
 
-        # Add terastallization option to JSON format if available
         if battle.can_tera:
             move_prompt += """\nProvide your response in JSON format with the following structure:
 {
@@ -1368,78 +1286,15 @@ Provide your response in JSON format with the following structure:
   "explanation": "A detailed explanation of why you chose this move, considering the opponent's pokemon, current battle state, and your strategy",
   "move": "The name of the move you want to use (must be one from the available moves list)"
 }"""
+        return move_prompt
 
-        # Initialize response variables
-        move_response_raw = ""
-        switch_response_raw = ""
-
-        # If no switches available, only get move response
-        if not has_available_switches:
-            print("[INFO]: No switches available, only considering moves")
-            print("----- Move Prompt (Only Option) -----")
-            print(move_prompt)
-            print("-------------------------------------")
-
-            # Get LLM response for move only
-            # move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
-
-            # Parse and execute move
-            try:
-                move_data = self._extract_json(move_response_raw)
-                chosen_move_name = move_data.get("move", "").strip()
-                should_terastallize = move_data.get("terastallize", False)
-
-                # Find matching move
-                for move in battle.available_moves:
-                    if move.id.lower().replace(" ", "").replace(
-                        "-", ""
-                    ) == chosen_move_name.lower().replace(" ", "").replace("-", ""):
-                        return BattleOrder(
-                            move,
-                            terastallize=(
-                                should_terastallize if battle.can_tera else False
-                            ),
-                        )
-
-                # If no exact match found, try fuzzy matching
-                available_move_ids = [m.id for m in battle.available_moves]
-                matches = get_close_matches(
-                    chosen_move_name.lower().replace(" ", "").replace("-", ""),
-                    [
-                        m.lower().replace(" ", "").replace("-", "")
-                        for m in available_move_ids
-                    ],
-                    n=1,
-                    cutoff=0.6,
-                )
-                if matches:
-                    for move in battle.available_moves:
-                        if (
-                            move.id.lower().replace(" ", "").replace("-", "")
-                            == matches[0]
-                        ):
-                            return BattleOrder(
-                                move,
-                                terastallize=(
-                                    should_terastallize if battle.can_tera else False
-                                ),
-                            )
-            except Exception as e:
-                print(f"Error parsing move-only response: {e}")
-
-            # Fallback to random move
-            return self.choose_random_move(battle)
-
-        # Both moves and switches are available - build both prompts
-        available_switches_list = []
-        for pokemon in battle.available_switches:
-            pokemon_name = self.denormalize_pokemon_name(pokemon.species)
-            hp_pct = round(pokemon.current_hp_fraction * 100, 1)
-            available_switches_list.append(f"  - {pokemon_name} (HP: {hp_pct}%)")
-
-        switches_options = "\n".join(available_switches_list)
-
-        # Build switch prompt with JSON output instructions
+    def _build_switch_prompt(
+        self,
+        side_conditions_prompt: str,
+        opponent_active_pokemon_prompt: str,
+        player_team_prompt: str,
+        switches_options: str,
+    ) -> str:
         switch_prompt = ""
         if side_conditions_prompt:
             switch_prompt += side_conditions_prompt + "\n"
@@ -1452,20 +1307,17 @@ Provide your response in JSON format with the following structure:
   "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
 }"""
+        return switch_prompt
 
-        print("----- Move Prompt -----")
-        print(move_prompt)
-        print("----- Switch Prompt -----")
-        print(switch_prompt)
-        print("-----------------------")
-
-        # Get LLM responses with JSON format
-        # move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
-        # switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
-        move_response_raw = ""
-        switch_response_raw = ""
-
-        # Enhanced merger prompt with opponent information
+    def _build_merger_prompt(
+        self,
+        battle: AbstractBattle,
+        terastallization_prompt: str,
+        moves_options: str,
+        switches_options: str,
+        move_response_raw: str,
+        switch_response_raw: str,
+    ) -> str:
         opponent_species = (
             self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)
             if battle.opponent_active_pokemon
@@ -1477,12 +1329,11 @@ Provide your response in JSON format with the following structure:
             else 0
         )
 
-        # Build merger prompt with terastallization context
         tera_context = ""
         if terastallization_prompt:
             tera_context = f"\n{terastallization_prompt}\n"
 
-        merger_prompt = f"""You are a pokemon battler that targets to win the pokemon battle. 
+        return f"""You are a pokemon battler that targets to win the pokemon battle. 
 
 Current Opponent's Active Pokemon: {opponent_species} (HP: {opponent_hp}%)
 {tera_context}
@@ -1513,102 +1364,200 @@ Provide your response in JSON format:
   "choice": "move" or "switch"
 }}"""
 
-        print("----- Merger Prompt -----")
-        print(merger_prompt)
-        # merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True)[0]
-        merger_response_json = ""
-
-        # Parse merger response to determine which action to take
+    def _parse_move_choice(
+        self, battle: AbstractBattle, move_response_raw: str
+    ) -> BattleOrder | None:
         try:
-            merger_data = self._extract_json(merger_response_json)
-            choice = merger_data.get("choice", "").strip().lower()
-        except:
-            choice = "move" if "move" in merger_response_json.lower() else "switch"
+            move_data = self._extract_json(move_response_raw)
+            chosen_move_name = move_data.get("move", "").strip()
+            should_terastallize = move_data.get("terastallize", False)
 
-        # Parse the selected action and create BattleOrder
-        try:
-            if "move" in choice:
-                # Parse move response
-                move_data = self._extract_json(move_response_raw)
-                chosen_move_name = move_data.get("move", "").strip()
-                should_terastallize = move_data.get("terastallize", False)
+            for move in battle.available_moves:
+                if move.id.lower().replace(" ", "").replace(
+                    "-", ""
+                ) == chosen_move_name.lower().replace(" ", "").replace("-", ""):
+                    return BattleOrder(
+                        move,
+                        terastallize=(
+                            should_terastallize if battle.can_tera else False
+                        ),
+                    )
 
-                # Find matching move
+            available_move_ids = [m.id for m in battle.available_moves]
+            matches = get_close_matches(
+                chosen_move_name.lower().replace(" ", "").replace("-", ""),
+                [
+                    m.lower().replace(" ", "").replace("-", "")
+                    for m in available_move_ids
+                ],
+                n=1,
+                cutoff=0.6,
+            )
+            if matches:
                 for move in battle.available_moves:
-                    if move.id.lower().replace(" ", "").replace(
-                        "-", ""
-                    ) == chosen_move_name.lower().replace(" ", "").replace("-", ""):
+                    if move.id.lower().replace(" ", "").replace("-", "") == matches[0]:
                         return BattleOrder(
                             move,
                             terastallize=(
                                 should_terastallize if battle.can_tera else False
                             ),
                         )
-
-                # If no exact match found, try fuzzy matching
-                available_move_ids = [m.id for m in battle.available_moves]
-                matches = get_close_matches(
-                    chosen_move_name.lower().replace(" ", "").replace("-", ""),
-                    [
-                        m.lower().replace(" ", "").replace("-", "")
-                        for m in available_move_ids
-                    ],
-                    n=1,
-                    cutoff=0.6,
-                )
-                if matches:
-                    for move in battle.available_moves:
-                        if (
-                            move.id.lower().replace(" ", "").replace("-", "")
-                            == matches[0]
-                        ):
-                            return BattleOrder(
-                                move,
-                                terastallize=(
-                                    should_terastallize if battle.can_tera else False
-                                ),
-                            )
-
-            elif "switch" in choice:
-                # Parse switch response
-                switch_data = self._extract_json(switch_response_raw)
-                chosen_pokemon_name = switch_data.get("switch", "").strip()
-
-                # Find matching pokemon
-                for pokemon in battle.available_switches:
-                    if pokemon.species.lower().replace(" ", "").replace(
-                        "-", ""
-                    ) == chosen_pokemon_name.lower().replace(" ", "").replace("-", ""):
-                        return BattleOrder(pokemon)
-
-                # If no exact match found, try fuzzy matching
-                available_switch_species = [
-                    p.species for p in battle.available_switches
-                ]
-                matches = get_close_matches(
-                    chosen_pokemon_name.lower().replace(" ", "").replace("-", ""),
-                    [
-                        s.lower().replace(" ", "").replace("-", "")
-                        for s in available_switch_species
-                    ],
-                    n=1,
-                    cutoff=0.6,
-                )
-                if matches:
-                    for pokemon in battle.available_switches:
-                        if (
-                            pokemon.species.lower().replace(" ", "").replace("-", "")
-                            == matches[0]
-                        ):
-                            return BattleOrder(pokemon)
-
         except Exception as e:
-            print(f"Error parsing LLM response: {e}")
-            print(f"Move response: {move_response_raw}")
-            print(f"Switch response: {switch_response_raw}")
-            print(f"Merger response: {merger_response_json}")
+            print(f"Error parsing move response: {e}")
+        return None
 
-        # input("Press Enter to continue...")
+    def _parse_switch_choice(
+        self, battle: AbstractBattle, switch_response_raw: str
+    ) -> BattleOrder | None:
+        try:
+            switch_data = self._extract_json(switch_response_raw)
+            chosen_pokemon_name = switch_data.get("switch", "").strip()
 
-        # Fallback to random move if parsing fails
+            for pokemon in battle.available_switches:
+                if pokemon.species.lower().replace(" ", "").replace(
+                    "-", ""
+                ) == chosen_pokemon_name.lower().replace(" ", "").replace("-", ""):
+                    return BattleOrder(pokemon)
+
+            available_switch_species = [p.species for p in battle.available_switches]
+            matches = get_close_matches(
+                chosen_pokemon_name.lower().replace(" ", "").replace("-", ""),
+                [
+                    s.lower().replace(" ", "").replace("-", "")
+                    for s in available_switch_species
+                ],
+                n=1,
+                cutoff=0.6,
+            )
+            if matches:
+                for pokemon in battle.available_switches:
+                    if (
+                        pokemon.species.lower().replace(" ", "").replace("-", "")
+                        == matches[0]
+                    ):
+                        return BattleOrder(pokemon)
+        except Exception as e:
+            print(f"Error parsing switch response: {e}")
+        return None
+
+    def choose_move(self, battle: AbstractBattle) -> BattleOrder:
+        system_prompt = self.get_system_prompt(battle)
+        side_conditions_prompt = self.get_side_conditions_prompt(battle)
+        opponent_active_pokemon_prompt = self.get_active_pokemon_prompt(
+            battle, opponent=True, enhanced=True
+        )
+
+        active_pokemon_fainted = (
+            not battle.active_pokemon
+            or battle.active_pokemon.fainted
+            or self.check_status(battle.active_pokemon.status) == "fainted"
+        )
+        has_available_switches = bool(battle.available_switches)
+
+        if active_pokemon_fainted:
+            if not has_available_switches:
+                print("[WARNING]: Active Pokemon fainted and no switches available!")
+                return self.choose_random_move(battle)
+
+            print("[INFO]: Active Pokemon is fainted, must switch")
+            player_team_prompt = self.get_player_team_prompt(battle)
+            switches_options = self._get_available_switches_list(battle)
+            switch_prompt = self._build_forced_switch_prompt(
+                side_conditions_prompt,
+                opponent_active_pokemon_prompt,
+                player_team_prompt,
+                switches_options,
+            )
+
+            print("----- Switch Prompt (Forced) -----")
+            print(switch_prompt)
+            print("----------------------------------")
+
+            # switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
+            switch_response_raw = ""
+
+            parsed_order = self._parse_switch_choice(battle, switch_response_raw)
+            if parsed_order:
+                return parsed_order
+            return self.choose_random_move(battle)
+
+        player_active_pokemon_prompt = self.get_active_pokemon_prompt(
+            battle, opponent=False, enhanced=False
+        )
+        player_team_prompt = self.get_player_team_prompt(battle)
+        terastallization_prompt = self.get_terastallization_prompt(battle)
+
+        moves_options = self._get_available_moves_list(battle)
+        move_prompt = self._build_move_prompt(
+            battle,
+            side_conditions_prompt,
+            player_active_pokemon_prompt,
+            opponent_active_pokemon_prompt,
+            terastallization_prompt,
+            moves_options,
+        )
+
+        if not has_available_switches:
+            print("[INFO]: No switches available, only considering moves")
+            print("----- Move Prompt (Only Option) -----")
+            print(move_prompt)
+            print("-------------------------------------")
+
+            # move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
+            move_response_raw = ""
+
+            parsed_order = self._parse_move_choice(battle, move_response_raw)
+            if parsed_order:
+                return parsed_order
+            return self.choose_random_move(battle)
+
+        switches_options = self._get_available_switches_list(battle)
+        switch_prompt = self._build_switch_prompt(
+            side_conditions_prompt,
+            opponent_active_pokemon_prompt,
+            player_team_prompt,
+            switches_options,
+        )
+
+        print("----- Move Prompt -----")
+        print(move_prompt)
+        print("----- Switch Prompt -----")
+        print(switch_prompt)
+        print("-----------------------")
+
+        # move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
+        # switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
+        move_response_raw = ""
+        switch_response_raw = ""
+
+        merger_prompt = self._build_merger_prompt(
+            battle,
+            terastallization_prompt,
+            moves_options,
+            switches_options,
+            move_response_raw,
+            switch_response_raw,
+        )
+
+        print("----- Merger Prompt -----")
+        print(merger_prompt)
+        # merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True)[0]
+        merger_response_json = ""
+
+        try:
+            merger_data = self._extract_json(merger_response_json)
+            choice = merger_data.get("choice", "").strip().lower()
+        except:
+            choice = "move" if "move" in merger_response_json.lower() else "switch"
+
+        if "move" in choice:
+            parsed_order = self._parse_move_choice(battle, move_response_raw)
+            if parsed_order:
+                return parsed_order
+        elif "switch" in choice:
+            parsed_order = self._parse_switch_choice(battle, switch_response_raw)
+            if parsed_order:
+                return parsed_order
+
+        input("miao miaoino")
         return self.choose_random_move(battle)
