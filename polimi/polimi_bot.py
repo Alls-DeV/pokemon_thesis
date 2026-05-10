@@ -460,16 +460,19 @@ class PolimiBot(Player):
                     moves_info.append(f"  * {move_name}: {move_explanation}{ko_str}")
                     known_moves.append(move.id)
 
-        # TODO: make the tera type works
         # Get tera type
         tera_type = "Unknown"
         if (
             hasattr(active_mon, "_terastallized_type")
             and active_mon._terastallized_type
         ):
-            tera_type = active_mon._terastallized_type
+            tera_type = active_mon._terastallized_type.name.capitalize() if hasattr(active_mon._terastallized_type, 'name') else str(active_mon._terastallized_type)
         elif hasattr(active_mon, "terastallized") and active_mon.terastallized:
             tera_type = f"Active (unknown type)"
+            if not opponent and self.team_json_data and self.denormalize_pokemon_name(species) in self.team_json_data:
+                tera_type = self.team_json_data[self.denormalize_pokemon_name(species)].get("tera", tera_type)
+        elif not opponent and self.team_json_data and self.denormalize_pokemon_name(species) in self.team_json_data:
+            tera_type = self.team_json_data[self.denormalize_pokemon_name(species)].get("tera", "Unknown")
 
         # Enhanced predictions if requested and available
         if enhanced and self.bayesian_predictor and opponent:
@@ -1117,6 +1120,9 @@ class PolimiBot(Player):
                 active_tera_type = (
                     battle.active_pokemon._terastallized_type.name.capitalize()
                 )
+            elif self.team_json_data and self.denormalize_pokemon_name(battle.active_pokemon.species) in self.team_json_data:
+                active_tera_type = self.team_json_data[self.denormalize_pokemon_name(battle.active_pokemon.species)].get("tera", "Unknown")
+            
             tera_prompt += f"* You CAN terastallize this turn! Your {self.denormalize_pokemon_name(battle.active_pokemon.species)}'s tera type: {active_tera_type}\n"
         elif battle.active_pokemon and battle.active_pokemon.terastallized:
             tera_type = (
@@ -1124,6 +1130,8 @@ class PolimiBot(Player):
                 if battle.active_pokemon._terastallized_type
                 else "Unknown"
             )
+            if tera_type == "Unknown" and self.team_json_data and self.denormalize_pokemon_name(battle.active_pokemon.species) in self.team_json_data:
+                tera_type = self.team_json_data[self.denormalize_pokemon_name(battle.active_pokemon.species)].get("tera", "Unknown")
             tera_prompt += f"* Your {self.denormalize_pokemon_name(battle.active_pokemon.species)} is currently terastallized (Type: {tera_type})\n"
         elif not battle.can_tera and battle._data.gen == 9:
             tera_prompt += "* You have already used your terastallization this battle\n"
