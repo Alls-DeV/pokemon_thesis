@@ -38,7 +38,7 @@ class PokemonPredictor:
     def _load_model(self):
         """Load the pre-trained model."""
         try:
-            self.predictor.load_and_train(force_retrain=True)
+            self.predictor.load_and_train(force_retrain=False)
             print(f"[OK] Model loaded successfully!")
             print(f"   Trained on {self.predictor.total_teams:,} teams")
             print(f"   Knows {len(self.predictor.species_counts):,} Pokemon species")

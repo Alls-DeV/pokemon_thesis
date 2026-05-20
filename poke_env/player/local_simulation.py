@@ -16,7 +16,7 @@ from poke_env.environment.side_condition import SideCondition
 from poke_env.environment.status import Status
 from poke_env.player.battle_order import BattleOrder
 from pokechamp.gpt_player import GPTPlayer
-from pokechamp.llama_player import LLAMAPlayer
+# from pokechamp.llama_player import LLAMAPlayer
 
 # Avoid circular import by importing here
 try:
@@ -165,7 +165,7 @@ class LocalSim():
                 self.moves_set = {}
 
 
-    def get_llm_system_prompt(self, _format: str, llm: GPTPlayer | LLAMAPlayer = None, team_str: str=None, model: str='gpt-4o'):
+    def get_llm_system_prompt(self, _format: str, llm: GPTPlayer = None, team_str: str=None, model: str='gpt-4o'):
         # sleep to make sure server has sent pokemon team information first
         # llm = GPTPlayer(api_key=KEY)
         if 'random' in _format:
