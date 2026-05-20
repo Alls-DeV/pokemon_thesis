@@ -1,0 +1,56 @@
+{
+  "Ribombee": {
+    "moves": [
+      "Psychic Noise",
+      "Sticky Web",
+      "Moonblast",
+      "Stun Spore"
+    ],
+    "tera": "Ghost"
+  },
+  "Great Tusk": {
+    "moves": [
+      "Headlong Rush",
+      "Ice Spinner",
+      "Rapid Spin",
+      "Close Combat"
+    ],
+    "tera": "Steel"
+  },
+  "Gholdengo": {
+    "moves": [
+      "Nasty Plot",
+      "Shadow Ball",
+      "Make It Rain",
+      "Dazzling Gleam"
+    ],
+    "tera": "Fairy"
+  },
+  "Manaphy": {
+    "moves": [
+      "Tail Glow",
+      "Surf",
+      "Energy Ball",
+      "Alluring Voice"
+    ],
+    "tera": "Fairy"
+  },
+  "Kingambit": {
+    "moves": [
+      "Swords Dance",
+      "Kowtow Cleave",
+      "Tera Blast",
+      "Sucker Punch"
+    ],
+    "tera": "Fairy"
+  },
+  "Iron Valiant": {
+    "moves": [
+      "Calm Mind",
+      "Moonblast",
+      "Shadow Ball",
+      "Encore"
+    ],
+    "tera": "Ghost"
+  }
+}

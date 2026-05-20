@@ -1,0 +1,56 @@
+{
+  "Gholdengo": {
+    "moves": [
+      "Nasty Plot",
+      "Shadow Ball",
+      "Make It Rain",
+      "Recover"
+    ],
+    "tera": "Fairy"
+  },
+  "Darkrai": {
+    "moves": [
+      "Dark Pulse",
+      "Sludge Bomb",
+      "Ice Beam",
+      "Will-O-Wisp"
+    ],
+    "tera": "Poison"
+  },
+  "Ting-Lu": {
+    "moves": [
+      "Spikes",
+      "Earthquake",
+      "Whirlwind",
+      "Ruination"
+    ],
+    "tera": "Poison"
+  },
+  "Zapdos": {
+    "moves": [
+      "Hurricane",
+      "Volt Switch",
+      "Thunder Wave",
+      "Roost"
+    ],
+    "tera": "Steel"
+  },
+  "Primarina": {
+    "moves": [
+      "Surf",
+      "Moonblast",
+      "Flip Turn",
+      "Psychic Noise"
+    ],
+    "tera": "Steel"
+  },
+  "Gliscor": {
+    "moves": [
+      "Swords Dance",
+      "Facade",
+      "Knock Off",
+      "Protect"
+    ],
+    "tera": "Normal"
+  }
+}
