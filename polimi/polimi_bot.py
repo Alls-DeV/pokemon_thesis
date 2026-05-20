@@ -16,6 +16,7 @@ import json
 import subprocess
 import shutil
 import tempfile
+import concurrent.futures
 from pathlib import Path
 from difflib import get_close_matches
 
@@ -1514,8 +1515,22 @@ Provide your response in JSON format:
         # print(switch_prompt)
         # print("-----------------------")
 
-        move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
-        switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_move = executor.submit(
+                self.llm.get_LLM_action, 
+                system_prompt=system_prompt, 
+                user_prompt=move_prompt, 
+                json_format=True
+            )
+            future_switch = executor.submit(
+                self.llm.get_LLM_action, 
+                system_prompt=system_prompt, 
+                user_prompt=switch_prompt, 
+                json_format=True
+            )
+            
+            move_response_raw = future_move.result()[0]
+            switch_response_raw = future_switch.result()[0]
 
         merger_prompt = self._build_merger_prompt(
             battle,
