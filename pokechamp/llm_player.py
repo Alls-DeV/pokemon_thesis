@@ -24,6 +24,7 @@ from pokechamp.gpt_player import GPTPlayer
 from pokechamp.llama_player import LLAMAPlayer
 from pokechamp.openrouter_player import OpenRouterPlayer
 from pokechamp.gemini_player import GeminiPlayer
+from pokechamp.deepseek_player import DeepSeekPlayer
 from pokechamp.ollama_player import OllamaPlayer
 from pokechamp.data_cache import (
     get_cached_move_effect,
@@ -126,6 +127,8 @@ class LLMPlayer(Player):
                 self.llm = LLAMAPlayer(device=device)
             elif 'gemini' in backend:
                 self.llm = GeminiPlayer(self.api_key)
+            elif "deepseek" in backend and not backend.startswith("deepseek-ai/"):
+                self.llm = DeepSeekPlayer(self.api_key)
             elif backend.startswith(('openai/', 'anthropic/', 'google/', 'meta/', 'mistral/', 'cohere/', 'perplexity/', 'deepseek/', 'microsoft/', 'nvidia/', 'huggingface/', 'together/', 'replicate/', 'fireworks/', 'localai/', 'vllm/', 'sagemaker/', 'vertex/', 'bedrock/', 'azure/', 'custom/')):
                 # OpenRouter supports hundreds of models from various providers
                 self.llm = OpenRouterPlayer(self.api_key)
