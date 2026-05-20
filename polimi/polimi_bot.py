@@ -7,6 +7,7 @@ from poke_env.player.player import Player
 from pokechamp.gpt_player import GPTPlayer
 from pokechamp.openrouter_player import OpenRouterPlayer
 from pokechamp.gemini_player import GeminiPlayer
+from pokechamp.deepseek_player import DeepSeekPlayer
 from poke_env.environment.pokemon import Pokemon
 from poke_env.environment.side_condition import SideCondition
 from bayesian.pokemon_predictor import PokemonPredictor
@@ -45,6 +46,8 @@ class PolimiBot(Player):
             self.llm = GPTPlayer(api_key)
         elif "gemini" in backend:
             self.llm = GeminiPlayer(api_key)
+        elif "deepseek" in backend and not backend.startswith("deepseek-ai/"):
+            self.llm = DeepSeekPlayer(api_key)
         elif backend.startswith(
             (
                 "openai/",
@@ -1457,12 +1460,11 @@ Provide your response in JSON format:
                 switches_options,
             )
 
-            print("----- Switch Prompt (Forced) -----")
-            print(switch_prompt)
-            print("----------------------------------")
+            # print("----- Switch Prompt (Forced) -----")
+            # print(switch_prompt)
+            # print("----------------------------------")
 
-            # switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
-            switch_response_raw = ""
+            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
 
             parsed_order = self._parse_switch_choice(battle, switch_response_raw)
             if parsed_order:
@@ -1486,13 +1488,12 @@ Provide your response in JSON format:
         )
 
         if not has_available_switches:
-            print("[INFO]: No switches available, only considering moves")
-            print("----- Move Prompt (Only Option) -----")
-            print(move_prompt)
-            print("-------------------------------------")
+            # print("[INFO]: No switches available, only considering moves")
+            # print("----- Move Prompt (Only Option) -----")
+            # print(move_prompt)
+            # print("-------------------------------------")
 
-            # move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
-            move_response_raw = ""
+            move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
 
             parsed_order = self._parse_move_choice(battle, move_response_raw)
             if parsed_order:
@@ -1507,16 +1508,14 @@ Provide your response in JSON format:
             switches_options,
         )
 
-        print("----- Move Prompt -----")
-        print(move_prompt)
-        print("----- Switch Prompt -----")
-        print(switch_prompt)
-        print("-----------------------")
+        # print("----- Move Prompt -----")
+        # print(move_prompt)
+        # print("----- Switch Prompt -----")
+        # print(switch_prompt)
+        # print("-----------------------")
 
-        # move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
-        # switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
-        move_response_raw = ""
-        switch_response_raw = ""
+        move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
+        switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
 
         merger_prompt = self._build_merger_prompt(
             battle,
@@ -1529,8 +1528,7 @@ Provide your response in JSON format:
 
         # print("----- Merger Prompt -----")
         # print(merger_prompt)
-        # merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True)[0]
-        merger_response_json = ""
+        merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True)[0]
 
         try:
             merger_data = self._extract_json(merger_response_json)
@@ -1547,5 +1545,4 @@ Provide your response in JSON format:
             if parsed_order:
                 return parsed_order
 
-        input("[DEBUG] Press Enter to continue")
         return self.choose_random_move(battle)
