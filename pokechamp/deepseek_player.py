@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-from time import sleep
+from time import sleep, time
 from openai import OpenAI, OpenAIError
 
 class DeepSeekPlayer():
@@ -20,7 +20,7 @@ class DeepSeekPlayer():
         self.completion_tokens = 0
         self.prompt_tokens = 0
 
-    def get_LLM_action(self, system_prompt, user_prompt, model='deepseek-v4-flash', temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=8000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
+    def get_LLM_action(self, system_prompt, user_prompt, model='deepseek-v4-pro', temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=8000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
         if stop is None:
             stop = []
             
@@ -34,6 +34,7 @@ class DeepSeekPlayer():
             }
             
             kwargs["temperature"] = temperature
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
             
             if stop:
                 kwargs["stop"] = stop
@@ -45,9 +46,12 @@ class DeepSeekPlayer():
             # Use max_tokens for DeepSeek as they might not support max_completion_tokens fully yet
             kwargs["max_tokens"] = max_tokens
 
+            print("===Sending request to DeepSeek")
+            timestamp = int(time())
             response = self.client.chat.completions.create(**kwargs)
-            
+            print(f"===Received response from DeepSeek in {int(time()) - timestamp} seconds")
             outputs = response.choices[0].message.content
+            print(f"\t===Raw output: {outputs}")
             
             # log completion tokens
             if response.usage:
@@ -92,7 +96,7 @@ class DeepSeekPlayer():
                 print("Max retries exceeded.")
                 sys.exit(1)
     
-    def get_LLM_query(self, system_prompt, user_prompt, temperature=0.7, model='deepseek-v4-flash', json_format=False, seed=None, stop=None, max_tokens=2000, retries=3):
+    def get_LLM_query(self, system_prompt, user_prompt, temperature=0.7, model='deepseek-v4-pro', json_format=False, seed=None, stop=None, max_tokens=2000, retries=3):
         if stop is None:
             stop = []
             
@@ -106,6 +110,7 @@ class DeepSeekPlayer():
             }
             
             kwargs["temperature"] = temperature
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
             
             if stop:
                 kwargs["stop"] = stop
