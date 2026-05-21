@@ -9,7 +9,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.insert(0, project_root)
 
 from common import *
-from poke_env.player.team_util import TeamSet, get_llm_player, get_metamon_teams, load_random_team
+from poke_env.player.team_util import TeamSet, get_llm_player
 
 def load_team(path, player=None):
     with open(path, 'r') as f:
@@ -46,32 +46,58 @@ parser.add_argument("--N", type=int, default=1)
 args = parser.parse_args()
 
 async def main():
-    player = get_llm_player(args, 
-                            args.player_backend, 
-                            args.player_prompt_algo, 
-                            args.player_name, 
-                            device=args.player_device,
-                            PNUMBER1=PNUMBER1,  # for name uniqueness locally
-                            battle_format=args.battle_format)
+    num_teams = 5
+    score_matrix = {p_idx: {o_idx: 0 for o_idx in range(1, num_teams + 1)} for p_idx in range(1, num_teams + 1)}
     
-    opponent = get_llm_player(args, 
-                            args.opponent_backend, 
-                            args.opponent_prompt_algo, 
-                            args.opponent_name, 
-                            device=args.opponent_device,
-                            PNUMBER1=PNUMBER1 + '2',  # for name uniqueness locally
-                            battle_format=args.battle_format)
+    for _ in range(1):
+        for player_team_idx in range(1, num_teams + 1):
+            for opponent_team_idx in range(1, num_teams + 1):
 
-    player_team_path = f"polimi/teams/team2.txt"
-    load_team(player_team_path, player)
+                player = get_llm_player(args, 
+                                        args.player_backend, 
+                                        args.player_prompt_algo, 
+                                        args.player_name, 
+                                        device=args.player_device,
+                                        PNUMBER1=PNUMBER1,  # for name uniqueness locally
+                                        battle_format=args.battle_format,
+                                        team_idx=player_team_idx)
+                
+                
+                opponent = get_llm_player(args, 
+                                        args.opponent_backend, 
+                                        args.opponent_prompt_algo, 
+                                        args.opponent_name, 
+                                        device=args.opponent_device,
+                                        PNUMBER1=PNUMBER1 + '2',  # for name uniqueness locally
+                                        battle_format=args.battle_format,
+                                        team_idx=opponent_team_idx)
+
+                player_team_path = f"polimi/teams/team{player_team_idx}.txt"
+                opponent_team_path = f"polimi/teams/team{opponent_team_idx}.txt"
+                load_team(player_team_path, player)
+                load_team(opponent_team_path, opponent)
+
+                await player.battle_against(opponent, n_battles=1)
+                score_matrix[player_team_idx][opponent_team_idx] += player.n_won_battles
+
+    # Print the score matrix
+    print("\n" + "="*50)
+    print(f"BATTLE RESULTS MATRIX (Player Wins out of {args.N})")
+    print("="*50)
+    print("Row: Player Team | Col: Opponent Team")
+    print("-" * 50)
     
-    opponent_team_path = f"polimi/teams/team1.txt"
-    load_team(opponent_team_path, opponent)
-
-    N = args.N
-    for i in range(N):
-        await player.battle_against(opponent, n_battles=1)
-
+    header = "P \\ O |" + "".join([f" Team {i} |" for i in range(1, num_teams + 1)])
+    print(header)
+    print("-" * len(header))
+    
+    for p_idx in range(1, num_teams + 1):
+        row_str = f"Team {p_idx} |"
+        for o_idx in range(1, num_teams + 1):
+            wins = score_matrix[p_idx][o_idx]
+            row_str += f" {wins:^6} |"
+        print(row_str)
+        print("-" * len(header))
 
 if __name__ == "__main__":
     asyncio.run(main())
