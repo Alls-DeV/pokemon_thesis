@@ -43,6 +43,7 @@ class PolimiBot(Player):
         self.api_key = api_key
         self.temperature = temperature
         self.team_idx = team_idx
+        self.backend = backend
         if "gpt" in backend and not backend.startswith("openai/"):
             self.llm = GPTPlayer(api_key)
         elif "gemini" in backend:
@@ -1474,7 +1475,7 @@ Provide your response in JSON format:
             # print(switch_prompt)
             # print("----------------------------------")
 
-            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True, battle=battle)[0]
+            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, model=self.backend, json_format=True, battle=battle)[0]
 
             parsed_order = self._parse_switch_choice(battle, switch_response_raw, switch_prompt)
             if parsed_order:
@@ -1503,7 +1504,7 @@ Provide your response in JSON format:
             # print(move_prompt)
             # print("-------------------------------------")
 
-            move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True, battle=battle)[0]
+            move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, model=self.backend, json_format=True, battle=battle)[0]
 
             parsed_order = self._parse_move_choice(battle, move_response_raw, move_prompt)
             if parsed_order:
@@ -1529,6 +1530,7 @@ Provide your response in JSON format:
                 self.llm.get_LLM_action, 
                 system_prompt=system_prompt, 
                 user_prompt=move_prompt, 
+                model=self.backend,
                 json_format=True,
                 battle=battle
             )
@@ -1536,6 +1538,7 @@ Provide your response in JSON format:
                 self.llm.get_LLM_action, 
                 system_prompt=system_prompt, 
                 user_prompt=switch_prompt, 
+                model=self.backend,
                 json_format=True,
                 battle=battle
             )
@@ -1568,7 +1571,7 @@ Provide your response in JSON format:
 
         # print("----- Merger Prompt -----")
         # print(merger_prompt)
-        merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True, battle=battle)[0]
+        merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, model=self.backend, json_format=True, battle=battle)[0]
 
         try:
             merger_data = self._extract_json(merger_response_json)

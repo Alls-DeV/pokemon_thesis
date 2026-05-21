@@ -42,7 +42,7 @@ class GPTPlayer():
                     
         print(f"Logged OpenAI game stats to {log_file}")
 
-    def get_LLM_action(self, system_prompt, user_prompt, model='gpt-5.4-mini', temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=20000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
+    def get_LLM_action(self, system_prompt, user_prompt, model, temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=20000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
         if stop is None:
             stop = []
             
@@ -163,7 +163,7 @@ class GPTPlayer():
                 print("Max retries exceeded.")
                 sys.exit(1)
     
-    def get_LLM_query(self, system_prompt, user_prompt, temperature=0.7, model='gpt-5.4-mini', json_format=False, seed=None, stop=None, max_tokens=200, retries=3):
+    def get_LLM_query(self, system_prompt, user_prompt, model, temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=200, retries=3):
         if stop is None:
             stop = []
             
@@ -200,7 +200,7 @@ class GPTPlayer():
             if retries > 0:
                 print(f"Retrying... ({retries} retries left)")
                 sleep(5)
-                return self.get_LLM_query(system_prompt, user_prompt, temperature, model, json_format, seed, stop, max_tokens, retries - 1)
+                return self.get_LLM_query(system_prompt, user_prompt, model, temperature, json_format, seed, stop, max_tokens, retries - 1)
             else:
                 print("Max retries exceeded.")
                 sys.exit(1)
