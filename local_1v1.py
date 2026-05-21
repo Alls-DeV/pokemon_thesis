@@ -49,40 +49,57 @@ async def main():
     num_teams = 5
     score_matrix = {p_idx: {o_idx: 0 for o_idx in range(1, num_teams + 1)} for p_idx in range(1, num_teams + 1)}
     
-    for _ in range(1):
+    # Initialize players once outside the loop to avoid name collisions
+    player = get_llm_player(args, 
+                            args.player_backend, 
+                            args.player_prompt_algo, 
+                            args.player_name, 
+                            device=args.player_device,
+                            PNUMBER1=PNUMBER1,  # for name uniqueness locally
+                            battle_format=args.battle_format,
+                            team_idx=1) # Initial dummy value, will be updated
+    
+    opponent = get_llm_player(args, 
+                            args.opponent_backend, 
+                            args.opponent_prompt_algo, 
+                            args.opponent_name, 
+                            device=args.opponent_device,
+                            PNUMBER1=PNUMBER1 + '2',  # for name uniqueness locally
+                            battle_format=args.battle_format,
+                            team_idx=1) # Initial dummy value, will be updated
+
+    for _ in range(args.N):
         for player_team_idx in range(1, num_teams + 1):
             for opponent_team_idx in range(1, num_teams + 1):
-
-                player = get_llm_player(args, 
-                                        args.player_backend, 
-                                        args.player_prompt_algo, 
-                                        args.player_name, 
-                                        device=args.player_device,
-                                        PNUMBER1=PNUMBER1,  # for name uniqueness locally
-                                        battle_format=args.battle_format,
-                                        team_idx=player_team_idx)
                 
-                
-                opponent = get_llm_player(args, 
-                                        args.opponent_backend, 
-                                        args.opponent_prompt_algo, 
-                                        args.opponent_name, 
-                                        device=args.opponent_device,
-                                        PNUMBER1=PNUMBER1 + '2',  # for name uniqueness locally
-                                        battle_format=args.battle_format,
-                                        team_idx=opponent_team_idx)
+                # Update team_idx for strategies if the bots support it
+                if hasattr(player, 'set_team_idx'):
+                    player.set_team_idx(player_team_idx)
+                elif hasattr(player, 'team_idx'):
+                    player.team_idx = player_team_idx
+                    
+                if hasattr(opponent, 'set_team_idx'):
+                    opponent.set_team_idx(opponent_team_idx)
+                elif hasattr(opponent, 'team_idx'):
+                    opponent.team_idx = opponent_team_idx
 
                 player_team_path = f"polimi/teams/team{player_team_idx}.txt"
                 opponent_team_path = f"polimi/teams/team{opponent_team_idx}.txt"
                 load_team(player_team_path, player)
                 load_team(opponent_team_path, opponent)
 
+                wins_before = player.n_won_battles
                 await player.battle_against(opponent, n_battles=1)
-                score_matrix[player_team_idx][opponent_team_idx] += player.n_won_battles
+                wins_after = player.n_won_battles
+                
+                if wins_after > wins_before:
+                    score_matrix[player_team_idx][opponent_team_idx] += 1
+                    
+                print(f"Completed battle {player_team_idx} vs {opponent_team_idx}")
 
     # Print the score matrix
     print("\n" + "="*50)
-    print(f"BATTLE RESULTS MATRIX (Player Wins out of {args.N})")
+    print(f"BATTLE RESULTS MATRIX (Player Win Rate over {args.N} battles)")
     print("="*50)
     print("Row: Player Team | Col: Opponent Team")
     print("-" * 50)
@@ -95,7 +112,9 @@ async def main():
         row_str = f"Team {p_idx} |"
         for o_idx in range(1, num_teams + 1):
             wins = score_matrix[p_idx][o_idx]
-            row_str += f" {wins:^6} |"
+            win_rate = (wins / args.N) * 100
+            win_rate_str = f"{win_rate:.0f}%"
+            row_str += f" {win_rate_str:^6} |"
         print(row_str)
         print("-" * len(header))
 
