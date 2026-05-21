@@ -89,13 +89,15 @@ async def main():
                 load_team(opponent_team_path, opponent)
 
                 wins_before = player.n_won_battles
+                print(f"Starting battle {player_team_idx} vs {opponent_team_idx}")
                 await player.battle_against(opponent, n_battles=1)
                 wins_after = player.n_won_battles
                 
                 if wins_after > wins_before:
                     score_matrix[player_team_idx][opponent_team_idx] += 1
-                    
-                print(f"Completed battle {player_team_idx} vs {opponent_team_idx}")
+                    print(f"Won battle {player_team_idx} vs {opponent_team_idx}")
+                else:
+                    print(f"Lost battle {player_team_idx} vs {opponent_team_idx}")
 
     # Print the score matrix
     print("\n" + "="*50)
