@@ -82,8 +82,17 @@ class DeepSeekPlayer():
             response = self.client.chat.completions.create(**kwargs)
             elapsed_time = time() - start_time
             outputs = response.choices[0].message.content
-            print(f"=~=~=~=~=~=~=~=~=~\n{user_prompt}")
-            print(f"=~=~=~=~=~=~=~=~=~\n{outputs}\n\n\n")
+            
+            b_id = battle.battle_tag if battle and hasattr(battle, 'battle_tag') else "default"
+            log_dir = "battle_log/deepseek_prompts"
+            os.makedirs(log_dir, exist_ok=True)
+            match_log_file = os.path.join(log_dir, f"prompts_{b_id}.log")
+            
+            with open(match_log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n\n\n=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~\n")
+                f.write(f"SYSTEM PROMPT:\n{system_prompt}\n")
+                f.write(f"\nUSER PROMPT:\n{user_prompt}\n")
+                f.write(f"\nOUTPUT:\n{outputs}\n")
 
             # log completion tokens
             cur_completion_tks = 0
