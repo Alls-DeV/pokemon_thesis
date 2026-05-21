@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import atexit
 from time import sleep, time
 from openai import OpenAI, OpenAIError
 
@@ -19,6 +20,29 @@ class DeepSeekPlayer():
         )
         self.completion_tokens = 0
         self.prompt_tokens = 0
+        self.game_stats = {}
+        atexit.register(self.log_game_stats)
+
+    def log_game_stats(self):
+        log_file = "deepseek_game_stats.log"
+        with open(log_file, "a") as f:
+            for b_id, stats in self.game_stats.items():
+                f.write(f"--- Game Stats for Battle: {b_id} ---\n")
+                for p_type in ["merger", "move", "switch"]:
+                    times = stats[p_type]["times"]
+                    tokens = stats[p_type]["tokens"]
+                    
+                    mean_time = sum(times) / len(times) if times else 0.0
+                    mean_tokens = sum(tokens) / len(tokens) if tokens else 0.0
+                    
+                    f.write(f"{p_type.capitalize()} requests ({len(times)} total):\n")
+                    f.write(f"  Mean Time: {mean_time:.2f} seconds\n")
+                    f.write(f"  Mean Tokens: {mean_tokens:.2f}\n")
+                    
+                    if p_type == "switch":
+                        f.write(f"  Skips ('Nothing'): {stats['switch']['skips']}\n")
+                f.write("\n")
+        print(f"Logged DeepSeek game stats to {log_file}")
 
     def get_LLM_action(self, system_prompt, user_prompt, model='deepseek-v4-pro', temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=8000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
         if stop is None:
@@ -46,18 +70,42 @@ class DeepSeekPlayer():
             # Use max_tokens for DeepSeek as they might not support max_completion_tokens fully yet
             kwargs["max_tokens"] = max_tokens
 
-            print("===Sending request to DeepSeek")
-            timestamp = int(time())
+            prompt_type = "unknown"
+            if "You have two possible actions to choose from:" in user_prompt:
+                prompt_type = "merger"
+            elif "Available switches:" in user_prompt:
+                prompt_type = "switch"
+            elif "Available moves:" in user_prompt:
+                prompt_type = "move"
+
+            start_time = time()
             response = self.client.chat.completions.create(**kwargs)
-            print(f"===Received response from DeepSeek in {int(time()) - timestamp} seconds")
+            elapsed_time = time() - start_time
             outputs = response.choices[0].message.content
-            print(f"\t===Raw output: {outputs}")
-            
+            print(f"=~=~=~=~=~=~=~=~=~\n{user_prompt}")
+            print(f"=~=~=~=~=~=~=~=~=~\n{outputs}\n\n\n")
+
             # log completion tokens
+            cur_completion_tks = 0
+            cur_prompt_tks = 0
             if response.usage:
-                self.completion_tokens += getattr(response.usage, 'completion_tokens', 0)
-                self.prompt_tokens += getattr(response.usage, 'prompt_tokens', 0)
-                
+                cur_completion_tks = getattr(response.usage, 'completion_tokens', 0)
+                cur_prompt_tks = getattr(response.usage, 'prompt_tokens', 0)
+                self.completion_tokens += cur_completion_tks
+                self.prompt_tokens += cur_prompt_tks
+            
+            b_id = battle.battle_tag if battle and hasattr(battle, 'battle_tag') else "default"
+            if b_id not in self.game_stats:
+                self.game_stats[b_id] = {
+                    "move": {"times": [], "tokens": []},
+                    "switch": {"times": [], "tokens": [], "skips": 0},
+                    "merger": {"times": [], "tokens": []}
+                }
+            
+            if prompt_type in self.game_stats[b_id]:
+                self.game_stats[b_id][prompt_type]["times"].append(elapsed_time)
+                self.game_stats[b_id][prompt_type]["tokens"].append(cur_prompt_tks + cur_completion_tks)
+            
             if json_format:
                 # Cleanup potential markdown formatting
                 json_str = outputs.strip()
@@ -69,8 +117,14 @@ class DeepSeekPlayer():
                     json_str = json_str[:-3]
                 json_str = json_str.strip()
                 
+                parsed_json = None
                 try:
-                    json.loads(json_str)
+                    parsed_json = json.loads(json_str)
+                    
+                    if prompt_type == "switch":
+                        if str(parsed_json.get("switch", "")).strip().lower() == "nothing":
+                            self.game_stats[b_id]["switch"]["skips"] += 1
+                            
                     return json_str, True, outputs
                 except json.JSONDecodeError:
                     start_idx = outputs.find('{')
@@ -78,7 +132,12 @@ class DeepSeekPlayer():
                     if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
                         fallback_json = outputs[start_idx:end_idx + 1]
                         try:
-                            json.loads(fallback_json)
+                            parsed_json = json.loads(fallback_json)
+                            
+                            if prompt_type == "switch":
+                                if str(parsed_json.get("switch", "")).strip().lower() == "nothing":
+                                    self.game_stats[b_id]["switch"]["skips"] += 1
+                                    
                             return fallback_json, True, outputs
                         except:
                             pass
