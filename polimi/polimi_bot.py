@@ -112,25 +112,7 @@ class PolimiBot(Player):
             print(f"[WARNING]: Failed to initialize Bayesian predictor: {e}")
             self.bayesian_predictor = None
 
-        strategy_file = f"polimi/strategies/team{self.team_idx}.json"
-        try:
-            with open(strategy_file, "r") as f:
-                self.strategy_data = json.load(f)
-        except FileNotFoundError:
-            print(
-                f"[WARNING]: Strategy file {strategy_file} not found, using empty dict"
-            )
-            self.strategy_data = {}
-
-        team_json_file = f"polimi/teams_json/team{self.team_idx}.json"
-        try:
-            with open(team_json_file, "r") as f:
-                self.team_json_data = json.load(f)
-        except FileNotFoundError:
-            print(
-                f"[WARNING]: Team JSON file {team_json_file} not found, using empty dict"
-            )
-            self.team_json_data = {}
+        self.set_team_idx(self.team_idx)
 
         # Create name mapping for common Pokemon
         self.name_mapping = {
@@ -271,6 +253,24 @@ class PolimiBot(Player):
             "corviknightgmax": "Corviknight",
             "grimmsnarrgmax": "Grimmsnarl",
         }
+
+    def set_team_idx(self, team_idx: int):
+        self.team_idx = team_idx
+        strategy_file = f"polimi/strategies/team{self.team_idx}.json"
+        try:
+            with open(strategy_file, "r") as f:
+                self.strategy_data = json.load(f)
+        except FileNotFoundError:
+            print(f"[WARNING]: Strategy file {strategy_file} not found, using empty dict")
+            self.strategy_data = {}
+
+        team_json_file = f"polimi/teams_json/team{self.team_idx}.json"
+        try:
+            with open(team_json_file, "r") as f:
+                self.team_json_data = json.load(f)
+        except FileNotFoundError:
+            print(f"[WARNING]: Team JSON file {team_json_file} not found, using empty dict")
+            self.team_json_data = {}
 
     def check_status(self, status):
         if status:
@@ -1199,7 +1199,7 @@ class PolimiBot(Player):
                     return json.loads(match.group(1))
                 except json.JSONDecodeError:
                     pass
-            raise ValueError("Could not extract valid JSON from response")
+            raise ValueError(f"Could not extract valid JSON from response text: {response_text}")
 
     def _get_available_switches_list(self, battle: AbstractBattle) -> str:
         available_switches_list = []
