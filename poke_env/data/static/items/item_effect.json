@@ -3907,6 +3907,10 @@
         "name": "Weakness Policy",
         "effect": "A held item that increases your attack each time you receive damage."
     },
+    "wellspringmask": {
+        "name": "Wellspring Mask",
+        "effect": "If an Ogerpon is holding a Wellspring Mask, it changes to its Wellspring Mask form. It increases the power of its moves by 20%."
+    },
     "whiteherb": {
         "name": "White Herb",
         "effect": "An item that restores any lowered stat in battle. It can be used only once."
