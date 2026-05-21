@@ -67,8 +67,6 @@ async def main():
     
     opponent_team_path = f"polimi/teams/team1.txt"
     load_team(opponent_team_path, opponent)
-    # opponent_teamloader = get_metamon_teams(args.battle_format, "modern_replays")
-    # opponent.update_team(opponent_teamloader.yield_team())
 
     N = args.N
     for i in range(N):
