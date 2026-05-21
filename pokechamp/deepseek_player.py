@@ -24,24 +24,27 @@ class DeepSeekPlayer():
         atexit.register(self.log_game_stats)
 
     def log_game_stats(self):
-        log_file = "deepseek_game_stats.log"
-        with open(log_file, "a") as f:
+        import csv
+        log_file = "deepseek_game_stats.csv"
+        file_exists = os.path.isfile(log_file)
+        
+        with open(log_file, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(["battle_id", "prompt_type", "total_requests", "mean_time_seconds", "mean_tokens", "switch_skips"])
+            
             for b_id, stats in self.game_stats.items():
-                f.write(f"--- Game Stats for Battle: {b_id} ---\n")
                 for p_type in ["merger", "move", "switch"]:
                     times = stats[p_type]["times"]
                     tokens = stats[p_type]["tokens"]
                     
                     mean_time = sum(times) / len(times) if times else 0.0
                     mean_tokens = sum(tokens) / len(tokens) if tokens else 0.0
+                    skips = stats["switch"]["skips"] if p_type == "switch" else 0
                     
-                    f.write(f"{p_type.capitalize()} requests ({len(times)} total):\n")
-                    f.write(f"  Mean Time: {mean_time:.2f} seconds\n")
-                    f.write(f"  Mean Tokens: {mean_tokens:.2f}\n")
+                    writer.writerow([b_id, p_type, len(times), f"{mean_time:.2f}", f"{mean_tokens:.2f}", skips])
                     
-                    if p_type == "switch":
-                        f.write(f"  Skips ('Nothing'): {stats['switch']['skips']}\n")
-                f.write("\n")
         print(f"Logged DeepSeek game stats to {log_file}")
 
     def get_LLM_action(self, system_prompt, user_prompt, model='deepseek-v4-pro', temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=8000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
