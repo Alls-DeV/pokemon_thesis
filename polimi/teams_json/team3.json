@@ -1,0 +1,56 @@
+{
+  "Ogerpon-Wellspring": {
+    "moves": [
+      "Ivy Cudgel",
+      "Knock Off",
+      "U-turn",
+      "Spikes"
+    ],
+    "tera": "Water"
+  },
+  "Garganacl": {
+    "moves": [
+      "Salt Cure",
+      "Stealth Rock",
+      "Protect",
+      "Recover"
+    ],
+    "tera": "Fairy"
+  },
+  "Great Tusk": {
+    "moves": [
+      "Headlong Rush",
+      "Ice Spinner",
+      "Knock Off",
+      "Rapid Spin"
+    ],
+    "tera": "Ice"
+  },
+  "Dragonite": {
+    "moves": [
+      "Extreme Speed",
+      "Earthquake",
+      "Ice Spinner",
+      "Dragon Dance"
+    ],
+    "tera": "Normal"
+  },
+  "Moltres": {
+    "moves": [
+      "Flamethrower",
+      "Brave Bird",
+      "Roost",
+      "Will-O-Wisp"
+    ],
+    "tera": "Fairy"
+  },
+  "Darkrai": {
+    "moves": [
+      "Dark Pulse",
+      "Ice Beam",
+      "Sludge Bomb",
+      "Trick"
+    ],
+    "tera": "Poison"
+  }
+}

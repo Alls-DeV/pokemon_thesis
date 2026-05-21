@@ -1,0 +1,56 @@
+{
+  "Dondozo": {
+    "moves": [
+      "Body Press",
+      "Avalanche",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "tera": "Fighting"
+  },
+  "Weezing-Galar": {
+    "moves": [
+      "Will-O-Wisp",
+      "Defog",
+      "Pain Split",
+      "Sludge Bomb"
+    ],
+    "tera": "Grass"
+  },
+  "Toxapex": {
+    "moves": [
+      "Sludge Bomb",
+      "Surf",
+      "Infestation",
+      "Ice Beam"
+    ],
+    "tera": "Dark"
+  },
+  "Iron Treads": {
+    "moves": [
+      "Earthquake",
+      "Rapid Spin",
+      "Stealth Rock",
+      "Protect"
+    ],
+    "tera": "Ghost"
+  },
+  "Blissey": {
+    "moves": [
+      "Calm Mind",
+      "Shadow Ball",
+      "Seismic Toss",
+      "Soft-Boiled"
+    ],
+    "tera": "Dark"
+  },
+  "Alomomola": {
+    "moves": [
+      "Acrobatics",
+      "Wish",
+      "Flip Turn",
+      "Protect"
+    ],
+    "tera": "Flying"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "Skarmory": {
+    "moves": [
+      "Whirlwind",
+      "Brave Bird",
+      "Spikes",
+      "Roost"
+    ],
+    "tera": "Dragon"
+  },
+  "Ting-Lu": {
+    "moves": [
+      "Stealth Rock",
+      "Earthquake",
+      "Whirlwind",
+      "Ruination"
+    ],
+    "tera": "Water"
+  },
+  "Zamazenta": {
+    "moves": [
+      "Close Combat",
+      "Heavy Slam",
+      "Crunch",
+      "Stone Edge"
+    ],
+    "tera": "Steel"
+  },
+  "Pecharunt": {
+    "moves": [
+      "Parting Shot",
+      "Foul Play",
+      "Malignant Chain",
+      "Recover"
+    ],
+    "tera": "Dark"
+  },
+  "Clefable": {
+    "moves": [
+      "Calm Mind",
+      "Moonblast",
+      "Moonlight",
+      "Knock Off"
+    ],
+    "tera": "Steel"
+  },
+  "Walking Wake": {
+    "moves": [
+      "Surf",
+      "Draco Meteor",
+      "Knock Off",
+      "Flip Turn"
+    ],
+    "tera": "Water"
+  }
+}
