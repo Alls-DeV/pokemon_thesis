@@ -47,3 +47,28 @@ print(PNUMBER1)
 seed = 100
 random.seed(seed)
 np.random.seed(seed)
+
+AVAILABLE_MODELS = [
+    # OpenAI models
+    "gpt-5.4-nano", "gpt-4o", "gpt-4o-2024-05-13", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo",
+    # Anthropic models
+    "anthropic/claude-3.5-sonnet", "anthropic/claude-3-opus", "anthropic/claude-3-haiku",
+    # Google models
+    "google/gemini-pro", "gemini-2.0-flash", "gemini-2.0-pro", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro",
+    # Meta models
+    "meta-llama/llama-3.1-70b-instruct", "meta-llama/llama-3.1-8b-instruct",
+    # Mistral models
+    "mistralai/mistral-7b-instruct", "mistralai/mixtral-8x7b-instruct",
+    # Cohere models
+    "cohere/command-r-plus", "cohere/command-r",
+    # Perplexity models
+    "perplexity/llama-3.1-sonar-small-128k", "perplexity/llama-3.1-sonar-large-128k",
+    # DeepSeek models
+    "deepseek-v4-flash", "deepseek-v4-pro", "deepseek-ai/deepseek-coder-33b-instruct", "deepseek-ai/deepseek-llm-67b-chat",
+    # Microsoft models
+    "microsoft/wizardlm-2-8x22b", "microsoft/phi-3-medium-128k-instruct",
+    # Ollama models
+    "ollama/gpt-oss:20b", "ollama/llama3.1:8b", "ollama/mistral", "ollama/qwen2.5", "ollama/gemma3:4b",
+    # Local models (via OpenRouter)
+    "llama", 'None' 
+]
