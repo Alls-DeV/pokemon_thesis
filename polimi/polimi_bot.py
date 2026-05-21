@@ -1358,7 +1358,7 @@ Provide your response in JSON format:
 }}"""
 
     def _parse_move_choice(
-        self, battle: AbstractBattle, move_response_raw: str
+        self, battle: AbstractBattle, move_response_raw: str, move_prompt: str = ""
     ) -> BattleOrder | None:
         try:
             move_data = self._extract_json(move_response_raw)
@@ -1396,11 +1396,11 @@ Provide your response in JSON format:
                             ),
                         )
         except Exception as e:
-            print(f"Error parsing move response: {e}")
+            print(f"Error parsing move response: {e}\n--- PROMPT SENT TO LLM ---\n{move_prompt}\n--------------------------")
         return None
 
     def _parse_switch_choice(
-        self, battle: AbstractBattle, switch_response_raw: str
+        self, battle: AbstractBattle, switch_response_raw: str, switch_prompt: str = ""
     ) -> BattleOrder | None:
         try:
             switch_data = self._extract_json(switch_response_raw)
@@ -1430,7 +1430,7 @@ Provide your response in JSON format:
                     ):
                         return BattleOrder(pokemon)
         except Exception as e:
-            print(f"Error parsing switch response: {e}")
+            print(f"Error parsing switch response: {e}\n--- PROMPT SENT TO LLM ---\n{switch_prompt}\n--------------------------")
         return None
 
     def choose_max_damage_move(self, battle: AbstractBattle):
@@ -1459,10 +1459,8 @@ Provide your response in JSON format:
                 return self.choose_random_move(battle)
 
             if len(battle.available_switches) == 1:
-                print("[INFO]: Only one switch available, forcing switch directly without LLM.")
                 return self.create_order(battle.available_switches[0])
 
-            print("[INFO]: Active Pokemon is fainted, must switch")
             player_team_prompt = self.get_player_team_prompt(battle)
             switches_options = self._get_available_switches_list(battle)
             switch_prompt = self._build_forced_switch_prompt(
@@ -1478,7 +1476,7 @@ Provide your response in JSON format:
 
             switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True, battle=battle)[0]
 
-            parsed_order = self._parse_switch_choice(battle, switch_response_raw)
+            parsed_order = self._parse_switch_choice(battle, switch_response_raw, switch_prompt)
             if parsed_order:
                 return parsed_order
             return self.choose_random_move(battle)
@@ -1507,7 +1505,7 @@ Provide your response in JSON format:
 
             move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True, battle=battle)[0]
 
-            parsed_order = self._parse_move_choice(battle, move_response_raw)
+            parsed_order = self._parse_move_choice(battle, move_response_raw, move_prompt)
             if parsed_order:
                 return parsed_order
             return self.choose_random_move(battle)
@@ -1554,7 +1552,7 @@ Provide your response in JSON format:
             pass
         
         if switch_is_nothing:
-            parsed_order = self._parse_move_choice(battle, move_response_raw)
+            parsed_order = self._parse_move_choice(battle, move_response_raw, move_prompt)
             if parsed_order:
                 return parsed_order
             return self.choose_max_damage_move(battle)
@@ -1579,11 +1577,11 @@ Provide your response in JSON format:
             choice = "move" if "move" in merger_response_json.lower() else "switch"
 
         if "move" in choice:
-            parsed_order = self._parse_move_choice(battle, move_response_raw)
+            parsed_order = self._parse_move_choice(battle, move_response_raw, move_prompt)
             if parsed_order:
                 return parsed_order
         elif "switch" in choice:
-            parsed_order = self._parse_switch_choice(battle, switch_response_raw)
+            parsed_order = self._parse_switch_choice(battle, switch_response_raw, switch_prompt)
             if parsed_order:
                 return parsed_order
 
