@@ -1294,10 +1294,11 @@ Provide your response in JSON format with the following structure:
             opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
-        switch_prompt += """\nProvide your response in JSON format with the following structure:
+        switch_prompt += """\nIf you believe that using a move is absolutely better and there is no valid reason to switch, you can set "switch" to "Nothing".
+Provide your response in JSON format with the following structure:
 {
   "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
-  "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
+  "switch": "The name of the pokemon you want to switch to (must be one from the available switches list, or 'Nothing' if you strongly prefer moving)"
 }"""
         return switch_prompt
 
@@ -1432,6 +1433,12 @@ Provide your response in JSON format:
             print(f"Error parsing switch response: {e}")
         return None
 
+    def choose_max_damage_move(self, battle: AbstractBattle):
+        if battle.available_moves:
+            best_move = max(battle.available_moves, key=lambda move: move.base_power)
+            return self.create_order(best_move)
+        return self.choose_random_move(battle)
+
     def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         system_prompt = self.get_system_prompt(battle)
         side_conditions_prompt = self.get_side_conditions_prompt(battle)
@@ -1451,6 +1458,10 @@ Provide your response in JSON format:
                 print("[WARNING]: Active Pokemon fainted and no switches available!")
                 return self.choose_random_move(battle)
 
+            if len(battle.available_switches) == 1:
+                print("[INFO]: Only one switch available, forcing switch directly without LLM.")
+                return self.create_order(battle.available_switches[0])
+
             print("[INFO]: Active Pokemon is fainted, must switch")
             player_team_prompt = self.get_player_team_prompt(battle)
             switches_options = self._get_available_switches_list(battle)
@@ -1465,7 +1476,7 @@ Provide your response in JSON format:
             # print(switch_prompt)
             # print("----------------------------------")
 
-            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True)[0]
+            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, json_format=True, battle=battle)[0]
 
             parsed_order = self._parse_switch_choice(battle, switch_response_raw)
             if parsed_order:
@@ -1494,7 +1505,7 @@ Provide your response in JSON format:
             # print(move_prompt)
             # print("-------------------------------------")
 
-            move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True)[0]
+            move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, json_format=True, battle=battle)[0]
 
             parsed_order = self._parse_move_choice(battle, move_response_raw)
             if parsed_order:
@@ -1520,17 +1531,33 @@ Provide your response in JSON format:
                 self.llm.get_LLM_action, 
                 system_prompt=system_prompt, 
                 user_prompt=move_prompt, 
-                json_format=True
+                json_format=True,
+                battle=battle
             )
             future_switch = executor.submit(
                 self.llm.get_LLM_action, 
                 system_prompt=system_prompt, 
                 user_prompt=switch_prompt, 
-                json_format=True
+                json_format=True,
+                battle=battle
             )
             
             move_response_raw = future_move.result()[0]
             switch_response_raw = future_switch.result()[0]
+
+        switch_is_nothing = False
+        try:
+            s_data = self._extract_json(switch_response_raw)
+            if s_data.get("switch", "").strip().lower() == "nothing":
+                switch_is_nothing = True
+        except:
+            pass
+        
+        if switch_is_nothing:
+            parsed_order = self._parse_move_choice(battle, move_response_raw)
+            if parsed_order:
+                return parsed_order
+            return self.choose_max_damage_move(battle)
 
         merger_prompt = self._build_merger_prompt(
             battle,
@@ -1543,7 +1570,7 @@ Provide your response in JSON format:
 
         # print("----- Merger Prompt -----")
         # print(merger_prompt)
-        merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True)[0]
+        merger_response_json = self.llm.get_LLM_action(system_prompt, merger_prompt, json_format=True, battle=battle)[0]
 
         try:
             merger_data = self._extract_json(merger_response_json)
