@@ -1,7 +1,8 @@
 import os
 import sys
 import json
-from time import sleep
+import atexit
+from time import sleep, time
 from openai import OpenAI, OpenAIError
 
 class GPTPlayer():
@@ -14,6 +15,32 @@ class GPTPlayer():
         self.client = OpenAI(api_key=self.api_key)
         self.completion_tokens = 0
         self.prompt_tokens = 0
+        self.game_stats = {}
+        atexit.register(self.log_game_stats)
+
+    def log_game_stats(self):
+        import csv
+        log_file = "openai_game_stats.csv"
+        file_exists = os.path.isfile(log_file)
+        
+        with open(log_file, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            # Write header if file is new
+            if not file_exists:
+                writer.writerow(["battle_id", "prompt_type", "total_requests", "mean_time_seconds", "mean_tokens", "switch_skips"])
+            
+            for b_id, stats in self.game_stats.items():
+                for p_type in ["merger", "move", "switch"]:
+                    times = stats[p_type]["times"]
+                    tokens = stats[p_type]["tokens"]
+                    
+                    mean_time = sum(times) / len(times) if times else 0.0
+                    mean_tokens = sum(tokens) / len(tokens) if tokens else 0.0
+                    skips = stats["switch"]["skips"] if p_type == "switch" else 0
+                    
+                    writer.writerow([b_id, p_type, len(times), f"{mean_time:.2f}", f"{mean_tokens:.2f}", skips])
+                    
+        print(f"Logged OpenAI game stats to {log_file}")
 
     def get_LLM_action(self, system_prompt, user_prompt, model='gpt-5.4-mini', temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=20000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
         if stop is None:
@@ -43,15 +70,50 @@ class GPTPlayer():
             # max_completion_tokens is the standard for both modern reasoning models and standard chat
             kwargs["max_completion_tokens"] = max_tokens
 
+            prompt_type = "unknown"
+            if "You have two possible actions to choose from:" in user_prompt:
+                prompt_type = "merger"
+            elif "Available switches:" in user_prompt:
+                prompt_type = "switch"
+            elif "Available moves:" in user_prompt:
+                prompt_type = "move"
+
+            start_time = time()
             response = self.client.chat.completions.create(**kwargs)
-            
+            elapsed_time = time() - start_time
             outputs = response.choices[0].message.content
             
+            b_id = battle.battle_tag if battle and hasattr(battle, 'battle_tag') else "default"
+            log_dir = "battle_log/openai_prompts"
+            os.makedirs(log_dir, exist_ok=True)
+            match_log_file = os.path.join(log_dir, f"prompts_{b_id}.log")
+            
+            with open(match_log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n\n\n=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~\n")
+                f.write(f"SYSTEM PROMPT:\n{system_prompt}\n")
+                f.write(f"\nUSER PROMPT:\n{user_prompt}\n")
+                f.write(f"\nOUTPUT:\n{outputs}\n")
+            
             # log completion tokens
+            cur_completion_tks = 0
+            cur_prompt_tks = 0
             if response.usage:
-                self.completion_tokens += getattr(response.usage, 'completion_tokens', 0)
-                self.prompt_tokens += getattr(response.usage, 'prompt_tokens', 0)
+                cur_completion_tks = getattr(response.usage, 'completion_tokens', 0)
+                cur_prompt_tks = getattr(response.usage, 'prompt_tokens', 0)
+                self.completion_tokens += cur_completion_tks
+                self.prompt_tokens += cur_prompt_tks
                 
+            if b_id not in self.game_stats:
+                self.game_stats[b_id] = {
+                    "move": {"times": [], "tokens": []},
+                    "switch": {"times": [], "tokens": [], "skips": 0},
+                    "merger": {"times": [], "tokens": []}
+                }
+            
+            if prompt_type in self.game_stats[b_id]:
+                self.game_stats[b_id][prompt_type]["times"].append(elapsed_time)
+                self.game_stats[b_id][prompt_type]["tokens"].append(cur_prompt_tks + cur_completion_tks)
+
             if json_format:
                 # Cleanup potential markdown formatting
                 json_str = outputs.strip()
@@ -63,8 +125,14 @@ class GPTPlayer():
                     json_str = json_str[:-3]
                 json_str = json_str.strip()
                 
+                parsed_json = None
                 try:
-                    json.loads(json_str)
+                    parsed_json = json.loads(json_str)
+                    
+                    if prompt_type == "switch":
+                        if str(parsed_json.get("switch", "")).strip().lower() == "nothing":
+                            self.game_stats[b_id]["switch"]["skips"] += 1
+                            
                     return json_str, True, outputs
                 except json.JSONDecodeError:
                     start_idx = outputs.find('{')
@@ -72,7 +140,12 @@ class GPTPlayer():
                     if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
                         fallback_json = outputs[start_idx:end_idx + 1]
                         try:
-                            json.loads(fallback_json)
+                            parsed_json = json.loads(fallback_json)
+                            
+                            if prompt_type == "switch":
+                                if str(parsed_json.get("switch", "")).strip().lower() == "nothing":
+                                    self.game_stats[b_id]["switch"]["skips"] += 1
+                                    
                             return fallback_json, True, outputs
                         except:
                             pass
