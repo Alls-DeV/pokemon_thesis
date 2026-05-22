@@ -27,7 +27,7 @@ class GPTPlayer():
             writer = csv.writer(f)
             # Write header if file is new
             if not file_exists:
-                writer.writerow(["battle_id", "prompt_type", "total_requests", "mean_time_seconds", "mean_tokens", "switch_skips"])
+                writer.writerow(["battle_id", "prompt_type", "total_requests", "mean_time_seconds", "mean_tokens", "switch_skips", "merger_switches", "merger_moves"])
             
             for b_id, stats in self.game_stats.items():
                 for p_type in ["merger", "move", "switch"]:
@@ -37,8 +37,10 @@ class GPTPlayer():
                     mean_time = sum(times) / len(times) if times else 0.0
                     mean_tokens = sum(tokens) / len(tokens) if tokens else 0.0
                     skips = stats["switch"]["skips"] if p_type == "switch" else 0
+                    merger_switches = stats["merger"]["switches"] if p_type == "merger" else 0
+                    merger_moves = stats["merger"]["moves"] if p_type == "merger" else 0
                     
-                    writer.writerow([b_id, p_type, len(times), f"{mean_time:.2f}", f"{mean_tokens:.2f}", skips])
+                    writer.writerow([b_id, p_type, len(times), f"{mean_time:.2f}", f"{mean_tokens:.2f}", skips, merger_switches, merger_moves])
                     
         print(f"Logged OpenAI game stats to {log_file}")
 
@@ -107,7 +109,7 @@ class GPTPlayer():
                 self.game_stats[b_id] = {
                     "move": {"times": [], "tokens": []},
                     "switch": {"times": [], "tokens": [], "skips": 0},
-                    "merger": {"times": [], "tokens": []}
+                    "merger": {"times": [], "tokens": [], "switches": 0, "moves": 0}
                 }
             
             if prompt_type in self.game_stats[b_id]:
@@ -132,6 +134,12 @@ class GPTPlayer():
                     if prompt_type == "switch":
                         if str(parsed_json.get("switch", "")).strip().lower() == "nothing":
                             self.game_stats[b_id]["switch"]["skips"] += 1
+                    elif prompt_type == "merger":
+                        choice = str(parsed_json.get("choice", "")).strip().lower()
+                        if choice == "switch":
+                            self.game_stats[b_id]["merger"]["switches"] += 1
+                        elif choice == "move":
+                            self.game_stats[b_id]["merger"]["moves"] += 1
                             
                     return json_str, True, outputs
                 except json.JSONDecodeError:
@@ -145,6 +153,12 @@ class GPTPlayer():
                             if prompt_type == "switch":
                                 if str(parsed_json.get("switch", "")).strip().lower() == "nothing":
                                     self.game_stats[b_id]["switch"]["skips"] += 1
+                            elif prompt_type == "merger":
+                                choice = str(parsed_json.get("choice", "")).strip().lower()
+                                if choice == "switch":
+                                    self.game_stats[b_id]["merger"]["switches"] += 1
+                                elif choice == "move":
+                                    self.game_stats[b_id]["merger"]["moves"] += 1
                                     
                             return fallback_json, True, outputs
                         except:
