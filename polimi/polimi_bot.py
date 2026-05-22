@@ -1185,21 +1185,31 @@ class PolimiBot(Player):
         """Extracts JSON from LLM response, handling potential markdown formatting."""
         if not response_text:
             raise ValueError("Empty response from LLM")
+            
+        def fix_unescaped_quotes(text: str) -> str:
+            # Try to fix unescaped quotes in the "explanation" value
+            match = re.search(r'"explanation"\s*:\s*"(.*)",\s*"(?:move|switch|choice)"', text, re.DOTALL)
+            if match:
+                explanation = match.group(1)
+                fixed_explanation = explanation.replace('"', '\\"')
+                return text[:match.start(1)] + fixed_explanation + text[match.end(1):]
+            return text
+
         try:
-            return json.loads(response_text)
+            return json.loads(fix_unescaped_quotes(response_text))
         except json.JSONDecodeError:
             match = re.search(
                 r"```(?:json)?\s*(\{.*?\})\s*```", response_text, re.DOTALL
             )
             if match:
                 try:
-                    return json.loads(match.group(1))
+                    return json.loads(fix_unescaped_quotes(match.group(1)))
                 except json.JSONDecodeError:
                     pass
             match = re.search(r"(\{.*\})", response_text, re.DOTALL)
             if match:
                 try:
-                    return json.loads(match.group(1))
+                    return json.loads(fix_unescaped_quotes(match.group(1)))
                 except json.JSONDecodeError:
                     pass
             raise ValueError(f"Could not extract valid JSON from response text: {response_text}")
@@ -1276,7 +1286,7 @@ Provide your response in JSON format with the following structure:
   "terastallize": true or false (whether to terastallize this turn while using the move)
 }"""
         else:
-            move_prompt += """\nProvide your response in JSON format with the following structure:
+            move_prompt += """\nProvide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
   "explanation": "A detailed explanation of why you chose this move, considering the opponent's pokemon, current battle state, and your strategy",
   "move": "The name of the move you want to use (must be one from the available moves list)"
@@ -1298,7 +1308,7 @@ Provide your response in JSON format with the following structure:
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
         switch_prompt += """\nIf you believe that using a move is absolutely better and there is no valid reason to switch, you can set "switch" to "Nothing".
-Provide your response in JSON format with the following structure:
+Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
   "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list, or 'Nothing' if you strongly prefer moving)"
@@ -1354,7 +1364,7 @@ Analyze both options considering:
 
 Choose the action with the better explanation that would lead you to win the battle.
 
-Provide your response in JSON format:
+Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {{
   "explanation": "Detailed reasoning comparing both options and why one is superior",
   "choice": "move" or "switch"
