@@ -33,12 +33,14 @@ class PolimiBot(Player):
         team_idx=1,
         account_configuration=None,
         server_configuration=None,
+        save_replays=False,
     ):
         super().__init__(
             battle_format=battle_format,
             team=team,
             account_configuration=account_configuration,
             server_configuration=server_configuration,
+            save_replays=save_replays,
         )
         self.api_key = api_key
         self.temperature = temperature

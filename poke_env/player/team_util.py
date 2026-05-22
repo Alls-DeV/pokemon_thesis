@@ -364,6 +364,7 @@ def get_llm_player(args,
             account_configuration=AccountConfiguration(f'{USERNAME}{PNUMBER1}', PASSWORD),
             server_configuration=server_config,
             device=device,
+            save_replays=args.log_dir,
         )
     else:
         # Try to find a custom bot in the bots folder
