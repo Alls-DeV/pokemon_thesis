@@ -419,10 +419,14 @@ class PolimiBot(Player):
             for move in battle.available_moves:
                 if move:
                     move_name = self.denormalize_move_name(move.id)
+                    move_type = move.type.name.capitalize() if hasattr(move, 'type') and move.type else "Unknown"
+                    move_cat = move.category.name.capitalize() if hasattr(move, 'category') and move.category else "Unknown"
+                    move_pow = move.base_power if hasattr(move, 'base_power') else 0
+                    
                     try:
-                        move_explanation = self.move_effect[move.id]
+                        move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}] " + self.move_effect[move.id]
                     except:
-                        move_explanation = ""
+                        move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}]"
                     # Compute turns to KO using this move
                     ko_turns = None
                     try:
@@ -445,10 +449,14 @@ class PolimiBot(Player):
             for move in active_mon.moves.values():
                 if move:
                     move_name = self.denormalize_move_name(move.id)
+                    move_type = move.type.name.capitalize() if hasattr(move, 'type') and move.type else "Unknown"
+                    move_cat = move.category.name.capitalize() if hasattr(move, 'category') and move.category else "Unknown"
+                    move_pow = move.base_power if hasattr(move, 'base_power') else 0
+                    
                     try:
-                        move_explanation = self.move_effect[move.id]
+                        move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}] " + self.move_effect[move.id]
                     except:
-                        move_explanation = ""
+                        move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}]"
                     # Compute turns to KO using this move
                     ko_turns = None
                     try:
@@ -1252,7 +1260,7 @@ class PolimiBot(Player):
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
         switch_prompt += """\nYour active Pokemon is fainted. You must choose a Pokemon to switch in.
-Provide your response in JSON format with the following structure:
+Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
   "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
@@ -1279,7 +1287,7 @@ Provide your response in JSON format with the following structure:
         move_prompt += f"\nAvailable moves:\n{moves_options}\n"
 
         if battle.can_tera:
-            move_prompt += """\nProvide your response in JSON format with the following structure:
+            move_prompt += """\nProvide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
   "explanation": "A detailed explanation of why you chose this move, considering the opponent's pokemon, current battle state, terastallization options, and your strategy",
   "move": "The name of the move you want to use (must be one from the available moves list)",
@@ -1362,11 +1370,13 @@ Analyze both options considering:
 - Current battle momentum and strategy
 - Which action gives you the best chance to win
 
+CRITICAL STRATEGY RULE: Switching out gives the opponent a completely FREE turn to attack or set up. You lose all momentum. You MUST heavily favor the MOVE ACTION unless the active Pokemon is in immediate danger of being knocked out without doing any damage, or if the switch provides an overwhelming tactical advantage. Do not switch just because a move is neutral or not super-effective.
+
 Choose the action with the better explanation that would lead you to win the battle.
 
 Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {{
-  "explanation": "Detailed reasoning comparing both options and why one is superior",
+  "explanation": "Detailed reasoning comparing both options and why one is superior. Acknowledge the cost of losing momentum if you choose to switch.",
   "choice": "move" or "switch"
 }}"""
 
@@ -1497,6 +1507,9 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         player_active_pokemon_prompt = self.get_active_pokemon_prompt(
             battle, opponent=False, enhanced=False
         )
+        if hasattr(battle.active_pokemon, "first_turn") and battle.active_pokemon.first_turn:
+            player_active_pokemon_prompt += "\nWARNING: This Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider using a MOVE instead of switching.\n"
+
         player_team_prompt = self.get_player_team_prompt(battle)
         terastallization_prompt = self.get_terastallization_prompt(battle)
 
