@@ -41,7 +41,10 @@ try {
   const damage = result.damage;
   const min = Array.isArray(damage) ? Math.min(...damage) : damage;
   const max = Array.isArray(damage) ? Math.max(...damage) : damage;
-  const defenderHP = input.defender.hp || 1; // absolute HP
+  
+  // Calculate true absolute defender HP based on their fraction and calculated max HP
+  const hpFraction = input.defender.hp_fraction !== undefined ? input.defender.hp_fraction : 1.0;
+  const defenderHP = Math.max(1, Math.round(defender.stats.hp * hpFraction));
 
   // naive expected hits (average roll)
   const avg = Array.isArray(damage) ? damage.reduce((a,b)=>a+b,0)/damage.length : damage;
