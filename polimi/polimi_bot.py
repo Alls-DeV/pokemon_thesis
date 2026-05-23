@@ -789,7 +789,7 @@ class PolimiBot(Player):
                 "ivs": ivs,
                 "boosts": boosts if boosts else None,
                 "status": calc_status,
-                "hp": mon.current_hp if mon.current_hp else mon.max_hp,
+                "hp_fraction": mon.current_hp_fraction,
             }
 
         # ---- Build field (weather / terrain / screens / rooms) ----
@@ -1109,6 +1109,202 @@ class PolimiBot(Player):
         else:
             return "Your team: No Pokemon information available.\n"
 
+    def get_opponent_team_prompt(self, battle: AbstractBattle, enhanced: bool) -> str:
+        """Create a prompt with each revealed opponent pokemon that is not currently active"""
+        team_info = []
+
+        for pokemon in battle.opponent_team.values():
+            if pokemon.active or pokemon == battle.opponent_active_pokemon:
+                continue
+                
+            if not pokemon.species:
+                continue
+
+            species = pokemon.species
+            hp_percentage = round(pokemon.current_hp_fraction * 100, 1)
+
+            # Get ability information
+            ability_name = pokemon.ability if pokemon.ability else "Unknown"
+            ability_effect = ""
+            if pokemon.ability:
+                try:
+                    ability_name = self.ability_effect[pokemon.ability]["name"]
+                    ability_effect = f" ({self.ability_effect[pokemon.ability]['effect']})"
+                except:
+                    ability_name = pokemon.ability
+                    ability_effect = ""
+
+            # Get item information
+            item_name = "unknown_item"
+            item_effect = ""
+            if pokemon.item:
+                try:
+                    item_name = self.item_effect[pokemon.item]["name"]
+                    item_effect = f" ({self.item_effect[pokemon.item]['effect']})"
+                except:
+                    item_name = pokemon.item
+
+            # Get status and volatile statuses
+            status = self.check_status(pokemon.status)
+            volatile_statuses = []
+            if hasattr(pokemon, "effects"):
+                for effect in pokemon.effects:
+                    try:
+                        if effect.is_volatile_status:
+                            volatile_statuses.append(effect.name.replace("_", " ").lower())
+                    except:
+                        pass
+
+            # Get moves information
+            moves_info = []
+            known_moves = []
+            
+            if hasattr(pokemon, "moves") and pokemon.moves:
+                for move in pokemon.moves.values():
+                    if move:
+                        move_name = self.denormalize_move_name(move.id)
+                        move_type = move.type.name.capitalize() if hasattr(move, 'type') and move.type else "Unknown"
+                        move_cat = move.category.name.capitalize() if hasattr(move, 'category') and move.category else "Unknown"
+                        move_pow = move.base_power if hasattr(move, 'base_power') else 0
+                        
+                        try:
+                            move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}] " + self.move_effect[move.id]
+                        except:
+                            move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}]"
+                        
+                        # Calculate KO turns against player's active
+                        ko_turns = None
+                        if battle.active_pokemon and status != "fainted":
+                            try:
+                                ko_result = self.turns_to_ko(
+                                    battle, move.id, attacker_is_opponent=True, attacker_pokemon=pokemon, defender_pokemon=battle.active_pokemon
+                                )
+                                if isinstance(ko_result, int):
+                                    ko_turns = ko_result
+                            except Exception:
+                                ko_turns = None
+                        ko_str = f" ({ko_turns} turns to KO your active pokemon)" if ko_turns is not None else ""
+                        
+                        moves_info.append(f"    * {move_name}: {move_explanation}{ko_str}")
+                        known_moves.append(move.id)
+
+            # Get tera type
+            tera_type = "Unknown"
+            if hasattr(pokemon, "_terastallized_type") and pokemon._terastallized_type:
+                tera_type = pokemon._terastallized_type.name.capitalize() if hasattr(pokemon._terastallized_type, 'name') else str(pokemon._terastallized_type)
+            elif hasattr(pokemon, "terastallized") and pokemon.terastallized:
+                tera_type = "Active (unknown type)"
+
+            # Enhanced predictions
+            if enhanced and self.bayesian_predictor:
+                normalized_species = self.denormalize_pokemon_name(species)
+                revealed_opponents = []
+                for p in battle.opponent_team.values():
+                    if p.species:
+                        revealed_opponents.append(self.denormalize_pokemon_name(p.species))
+                
+                observed_moves = [self.denormalize_move_name(m) for m in known_moves]
+                
+                predictions = self.bayesian_predictor.predict_component_probabilities(
+                    species=normalized_species,
+                    teammates=revealed_opponents,
+                    observed_moves=observed_moves,
+                )
+                
+                if "abilities" in predictions and predictions["abilities"] and ability_name == "Unknown":
+                    best_ability = predictions["abilities"][0][0]
+                    normalized_best_ability = best_ability.lower().replace(" ", "")
+                    ability_effect = "" if normalized_best_ability not in self.ability_effect else f" ({self.ability_effect[normalized_best_ability]['effect']})"
+                    ability_name = f"{best_ability}"
+                    
+                if "items" in predictions and predictions["items"] and item_name == "unknown_item":
+                    best_item = predictions["items"][0][0]
+                    normalized_best_item = best_item.lower().replace(" ", "")
+                    item_effect = "" if normalized_best_item not in self.item_effect else f" ({self.item_effect[normalized_best_item]['effect']})"
+                    item_name = f"{best_item}"
+                    
+                if "tera_types" in predictions and predictions["tera_types"] and tera_type == "Unknown":
+                    tera_type = f"{predictions['tera_types'][0][0]}"
+                    
+                if "moves" in predictions and predictions["moves"] and len(moves_info) < 4:
+                    predicted_moves = predictions["moves"]
+                    moves_to_add = 4 - len(moves_info)
+                    for move_name, prob in predicted_moves[:moves_to_add]:
+                        normalized_move_name = move_name.lower().replace(" ", "").translate(str.maketrans("", "", string.punctuation))
+                        if normalized_move_name not in known_moves:
+                            move_type = "Unknown"
+                            move_cat = "Unknown"
+                            move_pow = 0
+                            try:
+                                m = Move(normalized_move_name, gen=9)
+                                move_type = m.type.name.capitalize() if hasattr(m, 'type') and m.type else "Unknown"
+                                move_cat = m.category.name.capitalize() if hasattr(m, 'category') and m.category else "Unknown"
+                                move_pow = m.base_power if hasattr(m, 'base_power') else 0
+                            except Exception:
+                                pass
+                                
+                            if normalized_move_name not in self.move_effect:
+                                move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] Effect unknown"
+                            else:
+                                move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] {self.move_effect[normalized_move_name]}"
+                            
+                            ko_turns = None
+                            if battle.active_pokemon and status != "fainted":
+                                try:
+                                    ko_result = self.turns_to_ko(
+                                        battle, normalized_move_name, attacker_is_opponent=True, attacker_pokemon=pokemon, defender_pokemon=battle.active_pokemon
+                                    )
+                                    if isinstance(ko_result, int):
+                                        ko_turns = ko_result
+                                except Exception:
+                                    ko_turns = None
+                            ko_str = f" ({ko_turns} turns to KO your active pokemon)" if ko_turns is not None else ""
+                            moves_info.append(f"    * {move_name}{move_effect_str}{ko_str}")
+
+            while len(moves_info) < 4:
+                moves_info.append("    * Unknown move: Move not yet revealed")
+
+            status_line = ""
+            if status:
+                status_line = f"  * Status: {status}\n"
+            if volatile_statuses:
+                status_line += f"  * Volatile Statuses: {', '.join(volatile_statuses)}\n"
+                
+            boosts_info = []
+            if hasattr(pokemon, "boosts"):
+                stat_mapping = {"atk": "Atk", "def": "Def", "spa": "SpA", "spd": "SpD", "spe": "Spe", "accuracy": "Accuracy", "evasion": "Evasion"}
+                for stat, value in pokemon.boosts.items():
+                    if value != 0:
+                        sign = "+" if value > 0 else ""
+                        stat_name = stat_mapping.get(stat, stat.capitalize())
+                        boosts_info.append(f"{sign}{value} {stat_name}")
+            if boosts_info:
+                status_line += f"  * Stat Changes: {', '.join(boosts_info)}\n"
+                
+            if hasattr(pokemon, "protect_counter") and pokemon.protect_counter > 0:
+                status_line += f"  * Protect: Used successfully last turn (Consecutive uses: {pokemon.protect_counter}).\n"
+
+            speed_line = ""
+            if battle.active_pokemon and status != "fainted":
+                speed_comparison = self.get_speed_prompt(battle.active_pokemon, pokemon)
+                if speed_comparison:
+                    speed_line = f"  * Speed comparison: {speed_comparison}"
+
+            pokemon_info = f"""* Species: {self.denormalize_pokemon_name(species)}
+  * HP percentage: {hp_percentage}%
+  * Ability: {ability_name}{ability_effect}
+  * Item: {item_name}{item_effect}
+{status_line}  * Moves:
+{chr(10).join(moves_info)}
+  * Tera type: {tera_type}
+{speed_line}"""
+            team_info.append(pokemon_info)
+
+        if team_info:
+            return "Revealed Opponent's Team (Bench):\n" + "\n\n".join(team_info) + "\n"
+        else:
+            return "Revealed Opponent's Team (Bench): No other Pokemon revealed yet.\n"
+
     def get_speed_prompt(self, mon: Pokemon, mon_opp: Pokemon) -> str:
         mon_stats = mon.calculate_stats(battle_format=self.format)
         mon_opp_stats = mon_opp.calculate_stats(battle_format=self.format)
@@ -1263,6 +1459,7 @@ class PolimiBot(Player):
         self,
         side_conditions_prompt: str,
         opponent_active_pokemon_prompt: str,
+        opponent_team_prompt: str,
         player_team_prompt: str,
         switches_options: str,
     ) -> str:
@@ -1270,7 +1467,7 @@ class PolimiBot(Player):
         if side_conditions_prompt:
             switch_prompt += side_conditions_prompt + "\n"
         switch_prompt += (
-            opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
+            opponent_active_pokemon_prompt + "\n" + opponent_team_prompt + "\n" + player_team_prompt + "\n"
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
         switch_prompt += """\nYour active Pokemon is fainted. You must choose a Pokemon to switch in.
@@ -1287,6 +1484,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         side_conditions_prompt: str,
         player_active_pokemon_prompt: str,
         opponent_active_pokemon_prompt: str,
+        opponent_team_prompt: str,
         terastallization_prompt: str,
         moves_options: str,
     ) -> str:
@@ -1294,7 +1492,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if side_conditions_prompt:
             move_prompt += side_conditions_prompt + "\n"
         move_prompt += (
-            player_active_pokemon_prompt + "\n" + opponent_active_pokemon_prompt + "\n"
+            player_active_pokemon_prompt + "\n" + opponent_active_pokemon_prompt + "\n" + opponent_team_prompt + "\n"
         )
         if terastallization_prompt:
             move_prompt += terastallization_prompt + "\n"
@@ -1321,6 +1519,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         side_conditions_prompt: str,
         player_active_pokemon_prompt: str,
         opponent_active_pokemon_prompt: str,
+        opponent_team_prompt: str,
         player_team_prompt: str,
         switches_options: str,
     ) -> str:
@@ -1328,7 +1527,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if side_conditions_prompt:
             switch_prompt += side_conditions_prompt + "\n"
         switch_prompt += (
-            player_active_pokemon_prompt + "\n" + opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
+            player_active_pokemon_prompt + "\n" + opponent_active_pokemon_prompt + "\n" + opponent_team_prompt + "\n" + player_team_prompt + "\n"
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
         
@@ -1347,6 +1546,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         self,
         battle: AbstractBattle,
         player_active_pokemon_prompt: str,
+        opponent_team_prompt: str,
         terastallization_prompt: str,
         moves_options: str,
         switches_options: str,
@@ -1377,6 +1577,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
 {player_active_pokemon_prompt}
 
 Current Opponent's Active Pokemon: {opponent_species} (HP: {opponent_hp}%)
+{opponent_team_prompt}
 {tera_context}
 You have two possible actions to choose from:
 
@@ -1511,11 +1712,13 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             if len(battle.available_switches) == 1:
                 return self.create_order(battle.available_switches[0])
 
+            opponent_team_prompt = self.get_opponent_team_prompt(battle, enhanced=True)
             player_team_prompt = self.get_player_team_prompt(battle)
             switches_options = self._get_available_switches_list(battle)
             switch_prompt = self._build_forced_switch_prompt(
                 side_conditions_prompt,
                 opponent_active_pokemon_prompt,
+                opponent_team_prompt,
                 player_team_prompt,
                 switches_options,
             )
@@ -1535,6 +1738,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             battle, opponent=False, enhanced=False
         )
 
+        opponent_team_prompt = self.get_opponent_team_prompt(battle, enhanced=True)
         player_team_prompt = self.get_player_team_prompt(battle)
         terastallization_prompt = self.get_terastallization_prompt(battle)
 
@@ -1544,6 +1748,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             side_conditions_prompt,
             player_active_pokemon_prompt,
             opponent_active_pokemon_prompt,
+            opponent_team_prompt,
             terastallization_prompt,
             moves_options,
         )
@@ -1567,6 +1772,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             side_conditions_prompt,
             player_active_pokemon_prompt,
             opponent_active_pokemon_prompt,
+            opponent_team_prompt,
             player_team_prompt,
             switches_options,
         )
@@ -1615,6 +1821,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         merger_prompt = self._build_merger_prompt(
             battle,
             player_active_pokemon_prompt,
+            opponent_team_prompt,
             terastallization_prompt,
             moves_options,
             switches_options,
