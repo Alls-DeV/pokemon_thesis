@@ -47,6 +47,7 @@ class PolimiBot(Player):
         self.temperature = temperature
         self.team_idx = team_idx
         self.backend = backend
+        self._last_active_pokemon = {}
         if "gpt" in backend and not backend.startswith("openai/"):
             self.llm = GPTPlayer(api_key)
             self.llm.is_polimi = True
@@ -1128,8 +1129,15 @@ class PolimiBot(Player):
             if not pokemon.species:
                 continue
 
+            status = self.check_status(pokemon.status)
+            if status == "fainted" or pokemon.fainted or pokemon.current_hp_fraction == 0:
+                continue
+
             species = pokemon.species
             hp_percentage = round(pokemon.current_hp_fraction * 100, 1)
+
+            types_list = [t.name.capitalize() for t in pokemon.types if t] if hasattr(pokemon, "types") and pokemon.types else ["Unknown"]
+            types_str = "/".join(types_list)
 
             # Get ability information
             ability_name = pokemon.ability if pokemon.ability else "Unknown"
@@ -1531,6 +1539,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         opponent_team_prompt: str,
         player_team_prompt: str,
         switches_options: str,
+        just_switched_in: bool = False,
     ) -> str:
         switch_prompt = ""
         if side_conditions_prompt:
@@ -1540,7 +1549,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
         
-        if hasattr(battle.active_pokemon, "first_turn") and battle.active_pokemon.first_turn:
+        if just_switched_in:
             switch_prompt += "\nWARNING: Your active Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider using a MOVE (by returning 'Nothing') instead of switching.\n"
             
         switch_prompt += """\nIf you believe that using a move is absolutely better and there is no valid reason to switch, you can set "switch" to "Nothing".
@@ -1561,6 +1570,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         switches_options: str,
         move_response_raw: str,
         switch_response_raw: str,
+        just_switched_in: bool = False,
     ) -> str:
         opponent_species = (
             self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)
@@ -1578,7 +1588,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
             tera_context = f"\n{terastallization_prompt}\n"
 
         first_turn_warning = ""
-        if hasattr(battle.active_pokemon, "first_turn") and battle.active_pokemon.first_turn:
+        if just_switched_in:
             first_turn_warning = "\nWARNING: Your active Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider choosing the MOVE action instead of switching.\n"
 
         return f"""You are a pokemon battler that targets to win the pokemon battle. 
@@ -1711,6 +1721,17 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             or battle.active_pokemon.fainted
             or self.check_status(battle.active_pokemon.status) == "fainted"
         )
+        
+        active_pokemon_name = battle.active_pokemon.species if battle.active_pokemon else None
+        just_switched_in = False
+        
+        if active_pokemon_name and not active_pokemon_fainted:
+            last_active = self._last_active_pokemon.get(battle.battle_tag)
+            if last_active is not None and last_active != active_pokemon_name:
+                just_switched_in = True
+            
+            self._last_active_pokemon[battle.battle_tag] = active_pokemon_name
+
         has_available_switches = bool(battle.available_switches)
 
         if active_pokemon_fainted:
@@ -1784,6 +1805,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             opponent_team_prompt,
             player_team_prompt,
             switches_options,
+            just_switched_in=just_switched_in,
         )
 
         # print("----- Move Prompt -----")
@@ -1836,6 +1858,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             switches_options,
             move_response_raw,
             switch_response_raw,
+            just_switched_in=just_switched_in,
         )
 
         # print("----- Merger Prompt -----")
