@@ -407,8 +407,16 @@ class PolimiBot(Player):
             except:
                 item_name = active_mon.item
 
-        # Get status
+        # Get status and volatile statuses
         status = self.check_status(active_mon.status)
+        volatile_statuses = []
+        if hasattr(active_mon, "effects"):
+            for effect in active_mon.effects:
+                try:
+                    if effect.is_volatile_status:
+                        volatile_statuses.append(effect.name.replace("_", " ").lower())
+                except:
+                    pass
 
         # Get moves information
         moves_info = []
@@ -624,6 +632,25 @@ class PolimiBot(Player):
             status_line = f"* Status: {status}\n"
         else:
             status_line = ""
+            
+        if volatile_statuses:
+            status_line += f"* Volatile Statuses: {', '.join(volatile_statuses)}\n"
+
+        # Get stat boosts
+        boosts_info = []
+        if hasattr(active_mon, "boosts"):
+            stat_mapping = {
+                "atk": "Atk", "def": "Def", "spa": "SpA", 
+                "spd": "SpD", "spe": "Spe", "accuracy": "Accuracy", "evasion": "Evasion"
+            }
+            for stat, value in active_mon.boosts.items():
+                if value != 0:
+                    sign = "+" if value > 0 else ""
+                    stat_name = stat_mapping.get(stat, stat.capitalize())
+                    boosts_info.append(f"{sign}{value} {stat_name}")
+        
+        if boosts_info:
+            status_line += f"* Stat Changes: {', '.join(boosts_info)}\n"
 
         # Add speed comparison for player's pokemon
         speed_line = ""
