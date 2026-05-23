@@ -1395,7 +1395,8 @@ class PolimiBot(Player):
         active_pokemon = battle.active_pokemon.species
         denormalized_name = self.denormalize_pokemon_name(active_pokemon)
 
-        system_prompt = "You are a competitive Pokemon battler. Your goal is to win the battle by making optimal decisions based on the current state, type matchups, and predictions.\n"
+        system_prompt = "You are a pokemon battler in generation 9 OU format Pokemon Showdown that targets to win the pokemon battle.\n"
+        system_prompt += "CRITICAL DAMAGE CALCULATOR INFO: When you see '(X turns to KO...)' next to a move, this is the output of a highly accurate, built-in damage calculator. It accounts for actual stats, EVs, typing. You MUST trust these calculations as the definitive source of truth for damage output, unless there are items or abilities that could change the outcome.\n\n"
 
         if active_pokemon in self.strategy_data:
             system_prompt += f"Your active Pokémon is {denormalized_name}, and you should consider this strategy:\n{self.strategy_data[active_pokemon]}\n"
@@ -1564,6 +1565,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         self,
         battle: AbstractBattle,
         player_active_pokemon_prompt: str,
+        opponent_active_pokemon_prompt: str,
         opponent_team_prompt: str,
         terastallization_prompt: str,
         moves_options: str,
@@ -1572,17 +1574,6 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         switch_response_raw: str,
         just_switched_in: bool = False,
     ) -> str:
-        opponent_species = (
-            self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)
-            if battle.opponent_active_pokemon
-            else "Unknown"
-        )
-        opponent_hp = (
-            round(battle.opponent_active_pokemon.current_hp_fraction * 100, 1)
-            if battle.opponent_active_pokemon
-            else 0
-        )
-
         tera_context = ""
         if terastallization_prompt:
             tera_context = f"\n{terastallization_prompt}\n"
@@ -1595,7 +1586,8 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
 
 {player_active_pokemon_prompt}
 
-Current Opponent's Active Pokemon: {opponent_species} (HP: {opponent_hp}%)
+{opponent_active_pokemon_prompt}
+
 {opponent_team_prompt}
 {tera_context}
 You have two possible actions to choose from:
@@ -1852,6 +1844,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         merger_prompt = self._build_merger_prompt(
             battle,
             player_active_pokemon_prompt,
+            opponent_active_pokemon_prompt,
             opponent_team_prompt,
             terastallization_prompt,
             moves_options,
