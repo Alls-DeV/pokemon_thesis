@@ -385,6 +385,9 @@ class PolimiBot(Player):
         species = active_mon.species
         hp_percentage = round(active_mon.current_hp_fraction * 100, 1)
 
+        types_list = [t.name.capitalize() for t in active_mon.types if t] if hasattr(active_mon, "types") and active_mon.types else ["Unknown"]
+        types_str = "/".join(types_list)
+
         # Get ability information
         ability_name = active_mon.ability if active_mon.ability else "Unknown"
         ability_effect = ""
@@ -679,6 +682,7 @@ class PolimiBot(Player):
         # Build the final prompt
         prompt = f"""Information about {prefix} active pokemon:
 * Species: {self.denormalize_pokemon_name(species)}
+* Type: {types_str}
 * HP percentage: {hp_percentage}%
 * Ability: {ability_name}{ability_effect}
 * Item: {item_name}{item_effect}
@@ -1011,6 +1015,9 @@ class PolimiBot(Player):
                 if status == "fainted" or pokemon.active:
                     continue
 
+                types_list = [t.name.capitalize() for t in pokemon.types if t] if hasattr(pokemon, "types") and pokemon.types else ["Unknown"]
+                types_str = "/".join(types_list)
+
                 # Get ability information
                 ability_name = pokemon.ability if pokemon.ability else "Unknown"
                 ability_effect = ""
@@ -1095,6 +1102,7 @@ class PolimiBot(Player):
 
                 # Build pokemon entry using the same style as get_active_pokemon_prompt
                 pokemon_info = f"""* Species: {species}
+  * Type: {types_str}
   * HP percentage: {hp_percentage}%
   * Ability: {ability_name}{ability_effect}
   * Item: {item_name}{item_effect}
@@ -1291,6 +1299,7 @@ class PolimiBot(Player):
                     speed_line = f"  * Speed comparison: {speed_comparison}"
 
             pokemon_info = f"""* Species: {self.denormalize_pokemon_name(species)}
+  * Type: {types_str}
   * HP percentage: {hp_percentage}%
   * Ability: {ability_name}{ability_effect}
   * Item: {item_name}{item_effect}
