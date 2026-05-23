@@ -9,6 +9,7 @@ from pokechamp.openrouter_player import OpenRouterPlayer
 from pokechamp.gemini_player import GeminiPlayer
 from pokechamp.deepseek_player import DeepSeekPlayer
 from poke_env.environment.pokemon import Pokemon
+from poke_env.environment.move import Move
 from poke_env.environment.side_condition import SideCondition
 from bayesian.pokemon_predictor import PokemonPredictor
 import string
@@ -585,15 +586,25 @@ class PolimiBot(Player):
                         str.maketrans("", "", string.punctuation)
                     )
                     if normalized_move_name not in known_moves:
+                        move_type = "Unknown"
+                        move_cat = "Unknown"
+                        move_pow = 0
+                        try:
+                            m = Move(normalized_move_name, gen=9)
+                            move_type = m.type.name.capitalize() if hasattr(m, 'type') and m.type else "Unknown"
+                            move_cat = m.category.name.capitalize() if hasattr(m, 'category') and m.category else "Unknown"
+                            move_pow = m.base_power if hasattr(m, 'base_power') else 0
+                        except Exception:
+                            pass
+                            
                         if normalized_move_name not in self.move_effect:
                             print(
                                 f"[WARNING]: Predicted move '{normalized_move_name}' not found in move_effect.json"
                             )
-                        move_effect = (
-                            ""
-                            if normalized_move_name not in self.move_effect
-                            else f": {self.move_effect[normalized_move_name]}"
-                        )
+                            move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] Effect unknown"
+                        else:
+                            move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] {self.move_effect[normalized_move_name]}"
+                            
                         # Estimate KO turns for predicted move as well
                         ko_turns = None
                         try:
@@ -618,7 +629,7 @@ class PolimiBot(Player):
                                 if ko_turns is not None
                                 else ""
                             )
-                        moves_info.append(f"  * {move_name}{move_effect}{ko_str}")
+                        moves_info.append(f"  * {move_name}{move_effect_str}{ko_str}")
 
             # except Exception as e:
             #     print(f"[WARNING]: Error in enhanced prediction: {e}")
