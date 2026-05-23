@@ -652,6 +652,10 @@ class PolimiBot(Player):
         if boosts_info:
             status_line += f"* Stat Changes: {', '.join(boosts_info)}\n"
 
+        # Add protect usage info
+        if hasattr(active_mon, "protect_counter") and active_mon.protect_counter > 0:
+            status_line += f"* Protect: Used successfully last turn (Consecutive uses: {active_mon.protect_counter}). Using a Protect-like move again this turn will likely fail.\n"
+
         # Add speed comparison for player's pokemon
         speed_line = ""
         if not opponent and battle.opponent_active_pokemon:
