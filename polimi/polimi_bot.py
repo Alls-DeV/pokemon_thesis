@@ -909,15 +909,13 @@ class PolimiBot(Player):
         for side_condition in battle.side_conditions:
             side_condition_name = " ".join(side_condition.name.lower().split("_"))
             if side_condition == SideCondition.SPIKES:
-                effect = (
-                    " (cause damage to your pokémon when switch in except flying type)"
-                )
+                effect = " (will damage YOUR Pokémon when they switch in, unless Flying-type/Levitate)"
             elif side_condition == SideCondition.STEALTH_ROCK:
-                effect = " (cause rock-type damage to your pokémon when switch in)"
+                effect = " (will deal Rock-type damage to YOUR Pokémon when they switch in)"
             elif side_condition == SideCondition.STICKY_WEB:
-                effect = " (reduce the speed stat of your pokémon when switch in)"
+                effect = " (will lower the Speed stat of YOUR Pokémon when they switch in)"
             elif side_condition == SideCondition.TOXIC_SPIKES:
-                effect = " (cause your pokémon toxic when switch in)"
+                effect = " (will poison YOUR Pokémon when they switch in)"
             else:
                 effect = ""
 
@@ -926,7 +924,7 @@ class PolimiBot(Player):
 
         if player_side_condition_list:
             player_side_condition_prompt = (
-                "Your team's side conditions:\n"
+                "Hazards/Conditions on YOUR side of the field (These affect YOUR Pokémon):\n"
                 + "\n".join(player_side_condition_list)
                 + "\n"
             )
@@ -936,13 +934,13 @@ class PolimiBot(Player):
         for side_condition in battle.opponent_side_conditions:
             side_condition_name = " ".join(side_condition.name.lower().split("_"))
             if side_condition == SideCondition.SPIKES:
-                effect = " (cause damage to opponent pokémon when switch in except flying type)"
+                effect = " (will damage the OPPONENT'S Pokémon when they switch in, unless Flying-type/Levitate)"
             elif side_condition == SideCondition.STEALTH_ROCK:
-                effect = " (cause rock-type damage to opponent pokémon when switch in)"
+                effect = " (will deal Rock-type damage to the OPPONENT'S Pokémon when they switch in)"
             elif side_condition == SideCondition.STICKY_WEB:
-                effect = " (reduce the speed stat of opponent pokémon when switch in)"
+                effect = " (will lower the Speed stat of the OPPONENT'S Pokémon when they switch in)"
             elif side_condition == SideCondition.TOXIC_SPIKES:
-                effect = " (cause opponent pokémon toxic when switch in)"
+                effect = " (will poison the OPPONENT'S Pokémon when they switch in)"
             else:
                 effect = ""
 
@@ -951,7 +949,7 @@ class PolimiBot(Player):
 
         if opponent_side_condition_list:
             opponent_side_condition_prompt = (
-                "Opponent team's side conditions:\n"
+                "Hazards/Conditions on the OPPONENT'S side of the field (These affect THEIR Pokémon):\n"
                 + "\n".join(opponent_side_condition_list)
                 + "\n"
             )
