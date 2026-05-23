@@ -48,10 +48,13 @@ class PolimiBot(Player):
         self.backend = backend
         if "gpt" in backend and not backend.startswith("openai/"):
             self.llm = GPTPlayer(api_key)
+            self.llm.is_polimi = True
         elif "gemini" in backend:
             self.llm = GeminiPlayer(api_key)
+            self.llm.is_polimi = True
         elif "deepseek" in backend and not backend.startswith("deepseek-ai/"):
             self.llm = DeepSeekPlayer(api_key)
+            self.llm.is_polimi = True
         elif backend.startswith(
             (
                 "openai/",

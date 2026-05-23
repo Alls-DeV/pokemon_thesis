@@ -16,6 +16,7 @@ class GPTPlayer():
         self.completion_tokens = 0
         self.prompt_tokens = 0
         self.game_stats = {}
+        self.turn_stats = {}
         atexit.register(self.log_game_stats)
 
     def log_game_stats(self):
@@ -23,26 +24,58 @@ class GPTPlayer():
         log_file = "openai_game_stats.csv"
         file_exists = os.path.isfile(log_file)
         
-        with open(log_file, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            # Write header if file is new
-            if not file_exists:
-                writer.writerow(["battle_id", "prompt_type", "total_requests", "mean_time_seconds", "mean_tokens", "switch_skips", "merger_switches", "merger_moves"])
-            
-            for b_id, stats in self.game_stats.items():
-                for p_type in ["merger", "move", "switch"]:
-                    times = stats[p_type]["times"]
-                    tokens = stats[p_type]["tokens"]
+        if getattr(self, 'is_polimi', False):
+            with open(log_file, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                # Write header if file is new
+                if not file_exists:
+                    writer.writerow(["battle_id", "prompt_type", "total_requests", "mean_time_seconds", "mean_tokens", "switch_skips", "merger_switches", "merger_moves"])
+                
+                for b_id, stats in self.game_stats.items():
+                    for p_type in ["merger", "move", "switch"]:
+                        times = stats[p_type]["times"]
+                        tokens = stats[p_type]["tokens"]
+                        
+                        mean_time = sum(times) / len(times) if times else 0.0
+                        mean_tokens = sum(tokens) / len(tokens) if tokens else 0.0
+                        skips = stats["switch"]["skips"] if p_type == "switch" else 0
+                        merger_switches = stats["merger"]["switches"] if p_type == "merger" else 0
+                        merger_moves = stats["merger"]["moves"] if p_type == "merger" else 0
+                        
+                        writer.writerow([b_id, p_type, len(times), f"{mean_time:.2f}", f"{mean_tokens:.2f}", skips, merger_switches, merger_moves])
+                        
+            print(f"Logged OpenAI game stats to {log_file}")
+
+        # Log turn stats
+        for b_id, turns in self.turn_stats.items():
+            log_dir = "battle_log/turn_stats"
+            os.makedirs(log_dir, exist_ok=True)
+            file_path = os.path.join(log_dir, f"OpenAI_{b_id}_turn_stats.txt")
+            with open(file_path, "w", encoding="utf-8") as f:
+                total_prompt = 0
+                total_completion = 0
+                total_time = 0.0
+                num_turns = len(turns)
+                
+                for turn, stats in sorted(turns.items()):
+                    p_tks = stats["prompt_tokens"]
+                    c_tks = stats["completion_tokens"]
+                    t_time = stats["time"]
+                    f.write(f"Turn {turn}:\n")
+                    f.write(f"Input Tokens: {p_tks}\n")
+                    f.write(f"Output Tokens: {c_tks}\n")
+                    f.write(f"Time Spent: {t_time:.2f} seconds\n\n")
                     
-                    mean_time = sum(times) / len(times) if times else 0.0
-                    mean_tokens = sum(tokens) / len(tokens) if tokens else 0.0
-                    skips = stats["switch"]["skips"] if p_type == "switch" else 0
-                    merger_switches = stats["merger"]["switches"] if p_type == "merger" else 0
-                    merger_moves = stats["merger"]["moves"] if p_type == "merger" else 0
+                    total_prompt += p_tks
+                    total_completion += c_tks
+                    total_time += t_time
                     
-                    writer.writerow([b_id, p_type, len(times), f"{mean_time:.2f}", f"{mean_tokens:.2f}", skips, merger_switches, merger_moves])
-                    
-        print(f"Logged OpenAI game stats to {log_file}")
+                if num_turns > 0:
+                    f.write("--- Mean over all turns ---\n")
+                    f.write(f"Mean Input Tokens: {total_prompt / num_turns:.2f}\n")
+                    f.write(f"Mean Output Tokens: {total_completion / num_turns:.2f}\n")
+                    f.write(f"Mean Time Spent: {total_time / num_turns:.2f} seconds\n")
+        print(f"Logged OpenAI turn stats to battle_log/turn_stats/")
 
     def get_LLM_action(self, system_prompt, user_prompt, model, temperature=0.7, json_format=False, seed=None, stop=None, max_tokens=20000, actions=None, battle=None, ps_client=None, retries=3) -> tuple:
         if stop is None:
@@ -85,13 +118,20 @@ class GPTPlayer():
             elapsed_time = time() - start_time
             outputs = response.choices[0].message.content
             
-            b_id = battle.battle_tag if battle and hasattr(battle, 'battle_tag') else "default"
+            b_tag = battle.battle_tag if battle and hasattr(battle, 'battle_tag') else "default"
+            p_id = battle.player_username if battle and hasattr(battle, 'player_username') else "agent"
+            p_id = "".join(c for c in p_id if c.isalnum() or c in ('_', '-'))
+            b_id = f"{b_tag}_{p_id}"
+            
             log_dir = "battle_log/openai_prompts"
             os.makedirs(log_dir, exist_ok=True)
             match_log_file = os.path.join(log_dir, f"prompts_{b_id}.log")
             
+            turn_info = battle.turn if battle and hasattr(battle, 'turn') else "Unknown"
+            
             with open(match_log_file, "a", encoding="utf-8") as f:
                 f.write(f"\n\n\n=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~\n")
+                f.write(f"TURN: {turn_info} | PROMPT TYPE: {prompt_type}\n")
                 f.write(f"SYSTEM PROMPT:\n{system_prompt}\n")
                 f.write(f"\nUSER PROMPT:\n{user_prompt}\n")
                 f.write(f"\nOUTPUT:\n{outputs}\n")
@@ -115,6 +155,18 @@ class GPTPlayer():
             if prompt_type in self.game_stats[b_id]:
                 self.game_stats[b_id][prompt_type]["times"].append(elapsed_time)
                 self.game_stats[b_id][prompt_type]["tokens"].append(cur_prompt_tks + cur_completion_tks)
+
+            # Log turn stats
+            if battle and hasattr(battle, 'turn'):
+                turn = battle.turn
+                if b_id not in self.turn_stats:
+                    self.turn_stats[b_id] = {}
+                if turn not in self.turn_stats[b_id]:
+                    self.turn_stats[b_id][turn] = {"prompt_tokens": 0, "completion_tokens": 0, "time": 0.0}
+                
+                self.turn_stats[b_id][turn]["prompt_tokens"] += cur_prompt_tks
+                self.turn_stats[b_id][turn]["completion_tokens"] += cur_completion_tks
+                self.turn_stats[b_id][turn]["time"] += elapsed_time
 
             if json_format:
                 # Cleanup potential markdown formatting
