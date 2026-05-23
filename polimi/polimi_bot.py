@@ -1051,44 +1051,6 @@ class PolimiBot(Player):
                     if speed_comparison:
                         speed_line = f"  * Speed comparison: {speed_comparison}"
 
-                # Calculate opponent's fastest KO time against this Pokemon (worst case for player)
-                opponent_ko_line = ""
-                if battle.opponent_active_pokemon:
-                    min_opponent_ko_turns = None
-                    fastest_opponent_move = None
-
-                    # Check all opponent's known moves
-                    if (
-                        hasattr(battle.opponent_active_pokemon, "moves")
-                        and battle.opponent_active_pokemon.moves
-                    ):
-                        for opp_move in battle.opponent_active_pokemon.moves.values():
-                            if opp_move:
-                                try:
-                                    # Calculate how many turns this opponent move takes to KO this team Pokemon
-                                    # Attacker is opponent, defender is this team Pokemon
-                                    ko_result = self.turns_to_ko(
-                                        battle,
-                                        opp_move.id,
-                                        attacker_is_opponent=True,
-                                        attacker_pokemon=battle.opponent_active_pokemon,
-                                        defender_pokemon=pokemon,
-                                    )
-                                    if isinstance(ko_result, int):
-                                        if (
-                                            min_opponent_ko_turns is None
-                                            or ko_result < min_opponent_ko_turns
-                                        ):
-                                            min_opponent_ko_turns = ko_result
-                                            fastest_opponent_move = (
-                                                self.denormalize_move_name(opp_move.id)
-                                            )
-                                except Exception:
-                                    pass
-
-                    if min_opponent_ko_turns is not None and fastest_opponent_move:
-                        opponent_ko_line = f"  * Opponent's fastest KO: {min_opponent_ko_turns} turns (using {fastest_opponent_move})\n"
-
                 # Build pokemon entry using the same style as get_active_pokemon_prompt
                 pokemon_info = f"""* Species: {species}
   * HP percentage: {hp_percentage}%
@@ -1096,8 +1058,7 @@ class PolimiBot(Player):
   * Item: {item_name}{item_effect}
 {status_line}  * Moves:
 {chr(10).join(moves_list) if moves_list else "    * No moves revealed"}
-{speed_line}
-{opponent_ko_line}"""
+{speed_line}"""
 
                 team_info.append(pokemon_info)
 
@@ -1239,7 +1200,17 @@ class PolimiBot(Player):
         available_moves_list = []
         for move in battle.available_moves:
             move_name = self.denormalize_move_name(move.id)
-            available_moves_list.append(f"  - {move_name}")
+            move_type = move.type.name.capitalize() if hasattr(move, 'type') and move.type else "Unknown"
+            move_cat = move.category.name.capitalize() if hasattr(move, 'category') and move.category else "Unknown"
+            move_pow = move.base_power if hasattr(move, 'base_power') else 0
+            
+            try:
+                move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}] " + self.move_effect.get(move.id, "")
+            except:
+                move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}]"
+                
+            available_moves_list.append(f"  - {move_name}: {move_explanation.strip()}")
+            
         return (
             "\n".join(available_moves_list)
             if available_moves_list
@@ -1304,7 +1275,9 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
 
     def _build_switch_prompt(
         self,
+        battle: AbstractBattle,
         side_conditions_prompt: str,
+        player_active_pokemon_prompt: str,
         opponent_active_pokemon_prompt: str,
         player_team_prompt: str,
         switches_options: str,
@@ -1313,9 +1286,13 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if side_conditions_prompt:
             switch_prompt += side_conditions_prompt + "\n"
         switch_prompt += (
-            opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
+            player_active_pokemon_prompt + "\n" + opponent_active_pokemon_prompt + "\n" + player_team_prompt + "\n"
         )
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
+        
+        if hasattr(battle.active_pokemon, "first_turn") and battle.active_pokemon.first_turn:
+            switch_prompt += "\nWARNING: Your active Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider using a MOVE (by returning 'Nothing') instead of switching.\n"
+            
         switch_prompt += """\nIf you believe that using a move is absolutely better and there is no valid reason to switch, you can set "switch" to "Nothing".
 Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
@@ -1327,6 +1304,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
     def _build_merger_prompt(
         self,
         battle: AbstractBattle,
+        player_active_pokemon_prompt: str,
         terastallization_prompt: str,
         moves_options: str,
         switches_options: str,
@@ -1348,7 +1326,13 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if terastallization_prompt:
             tera_context = f"\n{terastallization_prompt}\n"
 
+        first_turn_warning = ""
+        if hasattr(battle.active_pokemon, "first_turn") and battle.active_pokemon.first_turn:
+            first_turn_warning = "\nWARNING: Your active Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider choosing the MOVE action instead of switching.\n"
+
         return f"""You are a pokemon battler that targets to win the pokemon battle. 
+
+{player_active_pokemon_prompt}
 
 Current Opponent's Active Pokemon: {opponent_species} (HP: {opponent_hp}%)
 {tera_context}
@@ -1370,7 +1354,7 @@ Analyze both options considering:
 - Terastallization opportunities and threats
 - Current battle momentum and strategy
 - Which action gives you the best chance to win
-
+{first_turn_warning}
 CRITICAL STRATEGY RULE: Switching out gives the opponent a completely FREE turn to attack or set up. You lose all momentum. You MUST heavily favor the MOVE ACTION unless the active Pokemon is in immediate danger of being knocked out without doing any damage, or if the switch provides an overwhelming tactical advantage. Do not switch just because a move is neutral or not super-effective.
 
 Choose the action with the better explanation that would lead you to win the battle.
@@ -1508,8 +1492,6 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         player_active_pokemon_prompt = self.get_active_pokemon_prompt(
             battle, opponent=False, enhanced=False
         )
-        if hasattr(battle.active_pokemon, "first_turn") and battle.active_pokemon.first_turn:
-            player_active_pokemon_prompt += "\nWARNING: This Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider using a MOVE instead of switching.\n"
 
         player_team_prompt = self.get_player_team_prompt(battle)
         terastallization_prompt = self.get_terastallization_prompt(battle)
@@ -1539,7 +1521,9 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
 
         switches_options = self._get_available_switches_list(battle)
         switch_prompt = self._build_switch_prompt(
+            battle,
             side_conditions_prompt,
+            player_active_pokemon_prompt,
             opponent_active_pokemon_prompt,
             player_team_prompt,
             switches_options,
@@ -1588,6 +1572,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
 
         merger_prompt = self._build_merger_prompt(
             battle,
+            player_active_pokemon_prompt,
             terastallization_prompt,
             moves_options,
             switches_options,
