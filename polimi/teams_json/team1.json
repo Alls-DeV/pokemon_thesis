@@ -6,7 +6,15 @@
       "Moonblast",
       "Stun Spore"
     ],
-    "tera": "Ghost"
+    "item": "Focus Sash",
+    "ability": "Shield Dust",
+    "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "tera": "Ghost",
+    "nature": "Timid"
   },
   "Great Tusk": {
     "moves": [
@@ -15,7 +23,15 @@
       "Rapid Spin",
       "Close Combat"
     ],
-    "tera": "Steel"
+    "item": "Heavy-Duty Boots",
+    "ability": "Protosynthesis",
+    "evs": {
+      "atk": 252,
+      "def": 4,
+      "spe": 252
+    },
+    "tera": "Steel",
+    "nature": "Jolly"
   },
   "Gholdengo": {
     "moves": [
@@ -24,7 +40,15 @@
       "Make It Rain",
       "Dazzling Gleam"
     ],
-    "tera": "Fairy"
+    "item": "Air Balloon",
+    "ability": "Good as Gold",
+    "tera": "Fairy",
+    "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Timid"
   },
   "Manaphy": {
     "moves": [
@@ -33,7 +57,15 @@
       "Energy Ball",
       "Alluring Voice"
     ],
-    "tera": "Fairy"
+    "item": "Leftovers",
+    "ability": "Hydration",
+    "evs": {
+      "def": 4,
+      "spa": 252,
+      "spe": 252
+    },
+    "tera": "Fairy",
+    "nature": "Timid"
   },
   "Kingambit": {
     "moves": [
@@ -42,7 +74,15 @@
       "Tera Blast",
       "Sucker Punch"
     ],
-    "tera": "Fairy"
+    "item": "Air Balloon",
+    "ability": "Supreme Overlord",
+    "tera": "Fairy",
+    "evs": {
+      "atk": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Jolly"
   },
   "Iron Valiant": {
     "moves": [
@@ -51,6 +91,14 @@
       "Shadow Ball",
       "Encore"
     ],
-    "tera": "Ghost"
+    "item": "Booster Energy",
+    "ability": "Quark Drive",
+    "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "tera": "Ghost",
+    "nature": "Timid"
   }
 }

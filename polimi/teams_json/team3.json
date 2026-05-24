@@ -6,7 +6,15 @@
       "U-turn",
       "Spikes"
     ],
-    "tera": "Water"
+    "item": "Wellspring Mask",
+    "ability": "Water Absorb",
+    "tera": "Water",
+    "evs": {
+      "atk": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Jolly"
   },
   "Garganacl": {
     "moves": [
@@ -15,7 +23,15 @@
       "Protect",
       "Recover"
     ],
-    "tera": "Fairy"
+    "item": "Leftovers",
+    "ability": "Purifying Salt",
+    "tera": "Fairy",
+    "evs": {
+      "hp": 252,
+      "def": 52,
+      "spd": 204
+    },
+    "nature": "Careful"
   },
   "Great Tusk": {
     "moves": [
@@ -24,7 +40,15 @@
       "Knock Off",
       "Rapid Spin"
     ],
-    "tera": "Ice"
+    "item": "Heavy-Duty Boots",
+    "ability": "Protosynthesis",
+    "tera": "Ice",
+    "evs": {
+      "atk": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Jolly"
   },
   "Dragonite": {
     "moves": [
@@ -33,7 +57,15 @@
       "Ice Spinner",
       "Dragon Dance"
     ],
-    "tera": "Normal"
+    "item": "Heavy-Duty Boots",
+    "ability": "Multiscale",
+    "tera": "Normal",
+    "evs": {
+      "atk": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Adamant"
   },
   "Moltres": {
     "moves": [
@@ -42,7 +74,16 @@
       "Roost",
       "Will-O-Wisp"
     ],
-    "tera": "Fairy"
+    "item": "Heavy-Duty Boots",
+    "ability": "Flame Body",
+    "tera": "Fairy",
+    "evs": {
+      "hp": 248,
+      "atk": 16,
+      "def": 232,
+      "spe": 12
+    },
+    "nature": "Adamant"
   },
   "Darkrai": {
     "moves": [
@@ -51,6 +92,14 @@
       "Sludge Bomb",
       "Trick"
     ],
-    "tera": "Poison"
+    "item": "Choice Scarf",
+    "ability": "Bad Dreams",
+    "tera": "Poison",
+    "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Timid"
   }
 }

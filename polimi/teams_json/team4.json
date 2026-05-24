@@ -6,7 +6,15 @@
       "Spikes",
       "Roost"
     ],
-    "tera": "Dragon"
+    "item": "Rocky Helmet",
+    "ability": "Sturdy",
+    "tera": "Dragon",
+    "evs": {
+      "hp": 248,
+      "def": 252,
+      "spd": 8
+    },
+    "nature": "Impish"
   },
   "Ting-Lu": {
     "moves": [
@@ -15,7 +23,15 @@
       "Whirlwind",
       "Ruination"
     ],
-    "tera": "Water"
+    "item": "Leftovers",
+    "ability": "Vessel of Ruin",
+    "tera": "Water",
+    "evs": {
+      "hp": 252,
+      "spd": 248,
+      "spe": 8
+    },
+    "nature": "Careful"
   },
   "Zamazenta": {
     "moves": [
@@ -24,7 +40,15 @@
       "Crunch",
       "Stone Edge"
     ],
-    "tera": "Steel"
+    "item": "Heavy-Duty Boots",
+    "ability": "Dauntless Shield",
+    "tera": "Steel",
+    "evs": {
+      "hp": 80,
+      "atk": 252,
+      "spe": 176
+    },
+    "nature": "Jolly"
   },
   "Pecharunt": {
     "moves": [
@@ -33,7 +57,15 @@
       "Malignant Chain",
       "Recover"
     ],
-    "tera": "Dark"
+    "item": "Heavy-Duty Boots",
+    "ability": "Poison Puppeteer",
+    "tera": "Dark",
+    "evs": {
+      "hp": 252,
+      "def": 196,
+      "spe": 60
+    },
+    "nature": "Bold"
   },
   "Clefable": {
     "moves": [
@@ -42,7 +74,15 @@
       "Moonlight",
       "Knock Off"
     ],
-    "tera": "Steel"
+    "item": "Leftovers",
+    "ability": "Magic Guard",
+    "tera": "Steel",
+    "evs": {
+      "hp": 252,
+      "def": 248,
+      "spe": 8
+    },
+    "nature": "Bold"
   },
   "Walking Wake": {
     "moves": [
@@ -51,6 +91,14 @@
       "Knock Off",
       "Flip Turn"
     ],
-    "tera": "Water"
+    "item": "Heavy-Duty Boots",
+    "ability": "Protosynthesis",
+    "tera": "Water",
+    "evs": {
+      "def": 12,
+      "spa": 244,
+      "spe": 252
+    },
+    "nature": "Timid"
   }
 }

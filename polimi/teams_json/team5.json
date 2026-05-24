@@ -6,16 +6,32 @@
       "Rest",
       "Sleep Talk"
     ],
-    "tera": "Fighting"
+    "item": "Heavy-Duty Boots",
+    "ability": "Unaware",
+    "tera": "Fighting",
+    "evs": {
+      "hp": 248,
+      "def": 252,
+      "spd": 8
+    },
+    "nature": "Impish"
   },
-  "Weezing-Galar": {
+  "og": {
     "moves": [
       "Will-O-Wisp",
       "Defog",
       "Pain Split",
       "Sludge Bomb"
     ],
-    "tera": "Grass"
+    "item": "Heavy-Duty Boots",
+    "ability": "Neutralizing Gas",
+    "tera": "Grass",
+    "evs": {
+      "hp": 252,
+      "def": 252,
+      "spe": 4
+    },
+    "nature": "Bold"
   },
   "Toxapex": {
     "moves": [
@@ -24,7 +40,15 @@
       "Infestation",
       "Ice Beam"
     ],
-    "tera": "Dark"
+    "item": "Assault Vest",
+    "ability": "Regenerator",
+    "tera": "Dark",
+    "evs": {
+      "hp": 248,
+      "def": 8,
+      "spa": 252
+    },
+    "nature": "Bold"
   },
   "Iron Treads": {
     "moves": [
@@ -33,7 +57,15 @@
       "Stealth Rock",
       "Protect"
     ],
-    "tera": "Ghost"
+    "item": "Leftovers",
+    "ability": "Quark Drive",
+    "tera": "Ghost",
+    "evs": {
+      "hp": 252,
+      "spd": 244,
+      "spe": 12
+    },
+    "nature": "Careful"
   },
   "Blissey": {
     "moves": [
@@ -42,7 +74,15 @@
       "Seismic Toss",
       "Soft-Boiled"
     ],
-    "tera": "Dark"
+    "item": "Leftovers",
+    "ability": "Natural Cure",
+    "tera": "Dark",
+    "evs": {
+      "hp": 4,
+      "def": 252,
+      "spd": 252
+    },
+    "nature": "Calm"
   },
   "Alomomola": {
     "moves": [
@@ -51,6 +91,14 @@
       "Flip Turn",
       "Protect"
     ],
-    "tera": "Flying"
+    "item": "Rocky Helmet",
+    "ability": "Regenerator",
+    "tera": "Flying",
+    "evs": {
+      "hp": 252,
+      "def": 252,
+      "spd": 4
+    },
+    "nature": "Relaxed"
   }
 }

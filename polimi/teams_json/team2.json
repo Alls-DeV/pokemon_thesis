@@ -6,7 +6,15 @@
       "Make It Rain",
       "Recover"
     ],
-    "tera": "Fairy"
+    "item": "Air Balloon",
+    "ability": "Good as Gold",
+    "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "tera": "Fairy",
+    "nature": "Timid"
   },
   "Darkrai": {
     "moves": [
@@ -15,7 +23,15 @@
       "Ice Beam",
       "Will-O-Wisp"
     ],
-    "tera": "Poison"
+    "item": "Heavy-Duty Boots",
+    "ability": "Bad Dreams",
+    "tera": "Poison",
+    "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+    },
+    "nature": "Timid"
   },
   "Ting-Lu": {
     "moves": [
@@ -24,7 +40,15 @@
       "Whirlwind",
       "Ruination"
     ],
-    "tera": "Poison"
+    "item": "Leftovers",
+    "ability": "Vessel of Ruin",
+    "evs": {
+      "hp": 252,
+      "def": 4,
+      "spd": 252
+    },
+    "tera": "Poison",
+    "nature": "Careful"
   },
   "Zapdos": {
     "moves": [
@@ -33,7 +57,15 @@
       "Thunder Wave",
       "Roost"
     ],
-    "tera": "Steel"
+    "item": "Heavy-Duty Boots",
+    "ability": "Static",
+    "evs": {
+      "hp": 248,
+      "def": 244,
+      "spe": 16
+    },
+    "tera": "Steel",
+    "nature": "Bold"
   },
   "Primarina": {
     "moves": [
@@ -42,7 +74,15 @@
       "Flip Turn",
       "Psychic Noise"
     ],
-    "tera": "Steel"
+    "item": "Assault Vest",
+    "ability": "Torrent",
+    "evs": {
+      "hp": 80,
+      "spa": 252,
+      "spe": 176
+    },
+    "tera": "Steel",
+    "nature": "Modest"
   },
   "Gliscor": {
     "moves": [
@@ -51,6 +91,14 @@
       "Knock Off",
       "Protect"
     ],
-    "tera": "Normal"
+    "item": "Toxic Orb",
+    "ability": "Poison Heal",
+    "evs": {
+      "hp": 244,
+      "def": 36,
+      "spd": 228
+    },
+    "tera": "Normal",
+    "nature": "Careful"
   }
 }
