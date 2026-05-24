@@ -280,6 +280,42 @@ class PolimiBot(Player):
             print(f"[WARNING]: Team JSON file {team_json_file} not found, using empty dict")
             self.team_json_data = {}
 
+    async def _handle_battle_message(self, split_messages: list[list[str]]):
+        await super()._handle_battle_message(split_messages)
+        
+        if not split_messages or not split_messages[0]:
+            return
+            
+        battle_tag = split_messages[0][0]
+        if battle_tag.startswith('>'):
+            battle_tag = battle_tag[1:]
+            
+        if not hasattr(self, 'battles') or battle_tag not in self.battles:
+            return
+            
+        battle = self.battles[battle_tag]
+        
+        if not hasattr(self, '_opponent_last_move'):
+            self._opponent_last_move = {}
+        if not hasattr(self, '_opponent_last_switch_turn'):
+            self._opponent_last_switch_turn = {}
+            
+        opponent_role = "p2" if battle.player_role == "p1" else "p1"
+        
+        for msg in split_messages:
+            if len(msg) > 2:
+                event = msg[1]
+                if event == "move":
+                    actor = msg[2]
+                    if actor.startswith(f"{opponent_role}a:"):
+                        move_name = msg[3]
+                        self._opponent_last_move[battle_tag] = move_name
+                elif event in ["switch", "drag"]:
+                    actor = msg[2]
+                    if actor.startswith(f"{opponent_role}a:"):
+                        self._opponent_last_move[battle_tag] = None
+                        self._opponent_last_switch_turn[battle_tag] = battle.turn
+
     def check_status(self, status):
         if status:
             if status.value == 1:
@@ -1251,6 +1287,14 @@ class PolimiBot(Player):
 
     def get_opponent_team_prompt(self, battle: AbstractBattle, enhanced: bool) -> str:
         """Create a prompt with each revealed opponent pokemon that is not currently active"""
+        # number of fainted pokemon
+        opponent_fainted_num = 0
+        for _, opponent_pokemon in battle.opponent_team.items():
+            if opponent_pokemon.fainted:
+                opponent_fainted_num += 1
+
+        opponent_unfainted_num = 6 - opponent_fainted_num
+
         team_info = []
 
         for pokemon in battle.opponent_team.values():
@@ -1509,9 +1553,9 @@ class PolimiBot(Player):
             team_info.append(pokemon_info)
 
         if team_info:
-            return "Revealed Opponent's Team (Bench):\n" + "\n\n".join(team_info) + "\n"
+            return f"Opponent's Remaining Alive Pokemon: {opponent_unfainted_num}\nRevealed Opponent's Team (Bench):\n" + "\n\n".join(team_info) + "\n"
         else:
-            return "Revealed Opponent's Team (Bench): No other Pokemon revealed yet.\n"
+            return f"Opponent's Remaining Alive Pokemon: {opponent_unfainted_num}\nRevealed Opponent's Team (Bench): No other Pokemon revealed yet.\n"
 
     def get_speed_prompt(self, mon: Pokemon, mon_opp: Pokemon) -> str:
         mon_stats = mon.calculate_stats(battle_format=self.format)
@@ -1666,6 +1710,13 @@ class PolimiBot(Player):
             except:
                 move_explanation = f"[Type: {move_type}, Category: {move_cat}, Power: {move_pow}]"
                 
+            if move.id == "encore":
+                last_move = getattr(self, "_opponent_last_move", {}).get(battle.battle_tag)
+                if not last_move:
+                    move_explanation += " NOTE: Encore will FAIL because the opponent hasn't used a move yet."
+                else:
+                    move_explanation += f" NOTE: If successful, it will force the opponent to repeat '{self.denormalize_move_name(last_move)}'."
+
             available_moves_list.append(f"  - {move_name}: {move_explanation.strip()}")
             
         return (
