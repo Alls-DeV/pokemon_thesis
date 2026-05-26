@@ -215,7 +215,7 @@ class LLMPlayer(Player):
             # Create an async function to send all message chunks
             async def send_message_async():
                 try:
-                    print(f"   Sending thinking to battle chat ({len(chunks)} parts)...")
+                    # print(f"   Sending thinking to battle chat ({len(chunks)} parts)...")
                     
                     for part_num, chunk in enumerate(chunks, 1):
                         if len(chunks) == 1:
@@ -233,7 +233,7 @@ class LLMPlayer(Player):
                     
                     # Send fast mode command once after all thinking
                     # await self.ps_client.send_message("/timer off", room=battle.battle_tag)
-                    print(f"   All thinking sent to {battle.battle_tag}")
+                    # print(f"   All thinking sent to {battle.battle_tag}")
                     
                 except Exception as e:
                     print(f"   Failed to send thinking message: {e}")
@@ -258,7 +258,7 @@ class LLMPlayer(Player):
         if battle is not None and raw_message:
             try:
                                 # Always show LLM reasoning in chat
-                print(f"LLM [{self.ps_client.account_configuration.username}]: {raw_message}")
+                # print(f"LLM [{self.ps_client.account_configuration.username}]: {raw_message}")
                 
                 self._send_thinking_message(battle, raw_message)
             except Exception as e:
