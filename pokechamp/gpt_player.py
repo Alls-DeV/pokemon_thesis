@@ -106,7 +106,7 @@ class GPTPlayer():
             kwargs["max_completion_tokens"] = max_tokens
 
             prompt_type = "unknown"
-            if "You have two possible actions to choose from:" in user_prompt:
+            if "Two actions are proposed by sub-agents:" in user_prompt:
                 prompt_type = "merger"
             elif "Available switches:" in user_prompt:
                 prompt_type = "switch"
