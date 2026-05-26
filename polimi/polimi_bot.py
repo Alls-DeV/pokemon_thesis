@@ -2062,21 +2062,36 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if not active or not opponent_mon:
             return ""
 
+        # Build effective opponent move ID set: battle-revealed moves PLUS moves
+        # known from the team JSON (get_known_opponent_team). This fixes the case
+        # where the opponent's moves are visible in the prompt via team_json_data
+        # but haven't been used in battle yet, causing "no moves revealed yet".
+        opp_move_ids: set[str] = set(opponent_mon.moves or {})
+        known_team = self.get_known_opponent_team(battle)
+        if known_team:
+            opp_species_key = self.denormalize_pokemon_name(opponent_mon.species)
+            opp_entry = known_team.get(opp_species_key, {})
+            for move_name in opp_entry.get("moves", []):
+                mid = move_name.lower().replace(" ", "").translate(
+                    str.maketrans("", "", string.punctuation)
+                )
+                opp_move_ids.add(mid)
+
         futures_map: dict = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
             for move in battle.available_moves:
                 key = ("move_atk", move.id)
                 futures_map[pool.submit(self.turns_to_ko, battle, move.id, 9, False)] = key
 
-            for move in (opponent_mon.moves or {}).values():
-                key = ("opp_vs_active", move.id)
-                futures_map[pool.submit(self.turns_to_ko, battle, move.id, 9, True)] = key
+            for move_id in opp_move_ids:
+                key = ("opp_vs_active", move_id)
+                futures_map[pool.submit(self.turns_to_ko, battle, move_id, 9, True)] = key
 
             for sw_mon in battle.available_switches:
-                for move in (opponent_mon.moves or {}).values():
-                    key = ("opp_vs_switch", sw_mon.species, move.id)
+                for move_id in opp_move_ids:
+                    key = ("opp_vs_switch", sw_mon.species, move_id)
                     futures_map[pool.submit(
-                        self.turns_to_ko, battle, move.id, 9, True, None, sw_mon
+                        self.turns_to_ko, battle, move_id, 9, True, None, sw_mon
                     )] = key
                 for move in (sw_mon.moves or {}).values():
                     key = ("switch_atk", sw_mon.species, move.id)
@@ -2107,11 +2122,11 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
 
         opp_threat_turns: int | None = None
         opp_threat_name: str | None = None
-        for move in (opponent_mon.moves or {}).values():
-            val = raw.get(("opp_vs_active", move.id))
+        for move_id in opp_move_ids:
+            val = raw.get(("opp_vs_active", move_id))
             if isinstance(val, int) and (opp_threat_turns is None or val < opp_threat_turns):
                 opp_threat_turns = val
-                opp_threat_name = self.denormalize_move_name(move.id)
+                opp_threat_name = self.denormalize_move_name(move_id)
 
         lines.append(f"MOVE (stay with {active_name} and attack):")
         if best_atk_turns is not None:
@@ -2120,7 +2135,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
             lines.append("  Your best attack: damage calc unavailable")
         if opp_threat_turns is not None:
             lines.append(f"  Opponent's biggest threat — {opp_threat_name}: KOs {active_name} in {opp_threat_turns} turn(s)")
-        elif not opponent_mon.moves:
+        elif not opp_move_ids:
             lines.append("  Opponent's threat: no moves revealed yet")
         else:
             lines.append("  Opponent's threat: damage calc unavailable")
@@ -2133,11 +2148,11 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
 
                 sw_opp_threat: int | None = None
                 sw_opp_move: str | None = None
-                for move in (opponent_mon.moves or {}).values():
-                    val = raw.get(("opp_vs_switch", sw_mon.species, move.id))
+                for move_id in opp_move_ids:
+                    val = raw.get(("opp_vs_switch", sw_mon.species, move_id))
                     if isinstance(val, int) and (sw_opp_threat is None or val < sw_opp_threat):
                         sw_opp_threat = val
-                        sw_opp_move = self.denormalize_move_name(move.id)
+                        sw_opp_move = self.denormalize_move_name(move_id)
 
                 sw_atk_turns: int | None = None
                 sw_atk_name: str | None = None
@@ -2154,7 +2169,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
                     lines.append(f"    Entry hazard cost: {hz_desc} → effective HP on arrival: {hp_after:.1f}%")
                 if sw_opp_threat is not None:
                     lines.append(f"    Durability: KO'd by {opp_name}'s {sw_opp_move} in {sw_opp_threat} turn(s)")
-                elif not opponent_mon.moves:
+                elif not opp_move_ids:
                     lines.append("    Durability: no opponent moves revealed yet")
                 else:
                     lines.append("    Durability: damage calc unavailable")
