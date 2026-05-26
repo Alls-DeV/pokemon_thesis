@@ -2008,7 +2008,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if battle.can_tera:
             move_prompt += """\nProvide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
-  "explanation": "A detailed explanation of why you chose this move, considering the opponent's pokemon, current battle state, terastallization options, and your strategy",
+  "explanation": "A concise explanation (1-2 sentences) of why you chose this move, considering the opponent's pokemon, current battle state, terastallization options, and your strategy",
   "move": "The name of the move you want to use (must be one from the available moves list)",
   "terastallize": true or false (whether to terastallize this turn while using the move)
 }"""
