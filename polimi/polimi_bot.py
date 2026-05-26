@@ -27,8 +27,9 @@ class PolimiBot(Player):
         self,
         battle_format,
         api_key="",
-        backend="gpt-4-1106-preview",
-        temperature=1.0,
+        backend="deepseek-v4-pro",
+        temperature=0.7,
+        voting_n: int = 1,
         device=0,
         team=None,
         team_idx=1,
@@ -45,6 +46,11 @@ class PolimiBot(Player):
         )
         self.api_key = api_key
         self.temperature = temperature
+        self.voting_n = max(1, voting_n)
+        if self.voting_n > 1 and temperature < 0.5:
+            print(f"[WARNING]: voting_n={self.voting_n} but temperature={temperature} "
+                  "is very low; vote results may be identical across calls. Increasing voting_temperature to 0.7 to encourage diversity in votes.")
+        self.voting_temperature = max(temperature, 0.7) if self.voting_n > 1 else temperature
         self.team_idx = team_idx
         self.backend = backend
         self._last_active_pokemon = {}
@@ -2228,6 +2234,56 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
 }}"""
         return merger_prompt
 
+    def _tally_votes(
+        self,
+        raws: list[str],
+        parse_fn,
+        battle: AbstractBattle,
+        prompt: str = "",
+    ) -> tuple[str, int]:
+        """Parse each raw LLM response, vote by action message, return (winning_raw, vote_count).
+
+        Returns ("", 0) if every response fails to parse.
+        """
+        from collections import Counter
+        pairs: list[tuple] = []
+        for raw in raws:
+            action = parse_fn(battle, raw, prompt)
+            if action is not None:
+                pairs.append((action, raw))
+        if not pairs:
+            return "", 0
+        counts = Counter(a.message for a, _ in pairs)
+        winner_msg, winner_cnt = counts.most_common(1)[0]
+        for action, raw in pairs:
+            if action.message == winner_msg:
+                return raw, winner_cnt
+        return "", 0
+
+    def _run_voted_llm(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        parse_fn,
+        battle: AbstractBattle,
+    ) -> tuple[str, int]:
+        """Submit voting_n parallel LLM calls and return (winning_raw, vote_count)."""
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.voting_n) as ex:
+            futures = [
+                ex.submit(
+                    self.llm.get_LLM_action,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    model=self.backend,
+                    temperature=self.voting_temperature,
+                    json_format=True,
+                    battle=battle,
+                )
+                for _ in range(self.voting_n)
+            ]
+            raws = [f.result()[0] for f in futures]
+        return self._tally_votes(raws, parse_fn, battle, user_prompt)
+
     def _parse_move_choice(
         self, battle: AbstractBattle, move_response_raw: str, move_prompt: str = ""
     ) -> BattleOrder | None:
@@ -2376,7 +2432,14 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             # print(switch_prompt)
             # print("----------------------------------")
 
-            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, model=self.backend, json_format=True, battle=battle)[0]
+            if self.voting_n > 1:
+                switch_response_raw, _ = self._run_voted_llm(
+                    system_prompt, switch_prompt, self._parse_switch_choice, battle
+                )
+                if not switch_response_raw:
+                    return self.choose_random_move(battle)
+            else:
+                switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, model=self.backend, json_format=True, battle=battle)[0]
 
             parsed_order = self._parse_switch_choice(battle, switch_response_raw, switch_prompt)
             if parsed_order:
@@ -2402,7 +2465,14 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
                 outcome_summary=outcome_summary,
             )
 
-            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, model=self.backend, json_format=True, battle=battle)[0]
+            if self.voting_n > 1:
+                switch_response_raw, _ = self._run_voted_llm(
+                    system_prompt, switch_prompt, self._parse_switch_choice, battle
+                )
+                if not switch_response_raw:
+                    return self.choose_random_move(battle)
+            else:
+                switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, model=self.backend, json_format=True, battle=battle)[0]
             parsed_order = self._parse_switch_choice(battle, switch_response_raw, switch_prompt)
             if parsed_order:
                 return parsed_order
@@ -2433,7 +2503,14 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             # print(move_prompt)
             # print("-------------------------------------")
 
-            move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, model=self.backend, json_format=True, battle=battle)[0]
+            if self.voting_n > 1:
+                move_response_raw, _ = self._run_voted_llm(
+                    system_prompt, move_prompt, self._parse_move_choice, battle
+                )
+                if not move_response_raw:
+                    return self.choose_random_move(battle)
+            else:
+                move_response_raw = self.llm.get_LLM_action(system_prompt, move_prompt, model=self.backend, json_format=True, battle=battle)[0]
 
             parsed_order = self._parse_move_choice(battle, move_response_raw, move_prompt)
             if parsed_order:
@@ -2464,24 +2541,83 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         # print(switch_prompt)
         # print("-----------------------")
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            future_move = executor.submit(
-                self.llm.get_LLM_action,
-                system_prompt=system_prompt,
-                user_prompt=move_prompt,
-                model=self.backend,
-                json_format=True,
-                battle=battle
+        if self.voting_n > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2 * self.voting_n) as executor:
+                move_futures = [
+                    executor.submit(
+                        self.llm.get_LLM_action,
+                        system_prompt=system_prompt,
+                        user_prompt=move_prompt,
+                        model=self.backend,
+                        temperature=self.voting_temperature,
+                        json_format=True,
+                        battle=battle,
+                    )
+                    for _ in range(self.voting_n)
+                ]
+                switch_futures = [
+                    executor.submit(
+                        self.llm.get_LLM_action,
+                        system_prompt=system_prompt,
+                        user_prompt=switch_prompt,
+                        model=self.backend,
+                        temperature=self.voting_temperature,
+                        json_format=True,
+                        battle=battle,
+                    )
+                    for _ in range(self.voting_n)
+                ]
+            move_raws = [f.result()[0] for f in move_futures]
+            switch_raws = [f.result()[0] for f in switch_futures]
+            move_response_raw, move_vote_cnt = self._tally_votes(
+                move_raws, self._parse_move_choice, battle, move_prompt
             )
-            future_switch = executor.submit(
-                self.llm.get_LLM_action,
-                system_prompt=system_prompt,
-                user_prompt=switch_prompt,
-                model=self.backend,
-                json_format=True,
-                battle=battle
-            )
+            if move_response_raw:
+                move_response_raw += f"\n[Vote confidence: {move_vote_cnt}/{self.voting_n} proposals agreed]"
 
+            # Partition switch votes: "Nothing" (prefer move) vs. a real switch.
+            # Nothing votes must be counted explicitly because _parse_switch_choice
+            # returns None for them, which _tally_votes discards.
+            nothing_raws = []
+            real_switch_raws = []
+            for raw in switch_raws:
+                try:
+                    s_data = self._extract_json(raw)
+                    if s_data.get("switch", "").strip().lower() == "nothing":
+                        nothing_raws.append(raw)
+                    else:
+                        real_switch_raws.append(raw)
+                except Exception:
+                    real_switch_raws.append(raw)
+
+            if len(nothing_raws) >= len(real_switch_raws):
+                # Majority (or tie) voted Nothing → treat as "switch is nothing"
+                switch_response_raw = nothing_raws[0]
+                switch_vote_cnt = len(nothing_raws)
+            else:
+                switch_response_raw, switch_vote_cnt = self._tally_votes(
+                    real_switch_raws, self._parse_switch_choice, battle, switch_prompt
+                )
+            if switch_response_raw:
+                switch_response_raw += f"\n[Vote confidence: {switch_vote_cnt}/{self.voting_n} proposals agreed]"
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                future_move = executor.submit(
+                    self.llm.get_LLM_action,
+                    system_prompt=system_prompt,
+                    user_prompt=move_prompt,
+                    model=self.backend,
+                    json_format=True,
+                    battle=battle,
+                )
+                future_switch = executor.submit(
+                    self.llm.get_LLM_action,
+                    system_prompt=system_prompt,
+                    user_prompt=switch_prompt,
+                    model=self.backend,
+                    json_format=True,
+                    battle=battle,
+                )
             move_response_raw = future_move.result()[0]
             switch_response_raw = future_switch.result()[0]
 
