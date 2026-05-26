@@ -1922,7 +1922,7 @@ class PolimiBot(Player):
         switch_prompt += f"""\n{entry_message}
 Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {{
-  "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
+  "explanation": "A concise explanation (1-2 sentences) of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
 }}"""
         return switch_prompt
@@ -2015,7 +2015,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         else:
             move_prompt += """\nProvide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
-  "explanation": "A detailed explanation of why you chose this move, considering the opponent's pokemon, current battle state, and your strategy",
+  "explanation": "A concise explanation (1-2 sentences) of why you chose this move, considering the opponent's pokemon, current battle state, and your strategy",
   "move": "The name of the move you want to use (must be one from the available moves list)"
 }"""
         return move_prompt
@@ -2050,7 +2050,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         switch_prompt += """\nIf you believe that using a move is absolutely better and there is no valid reason to switch, you can set "switch" to "Nothing".
 Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
-  "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
+  "explanation": "A concise explanation (1-2 sentences) of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list, or 'Nothing' if you strongly prefer moving)"
 }"""
         return switch_prompt
