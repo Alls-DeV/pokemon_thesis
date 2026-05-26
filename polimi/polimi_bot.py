@@ -1561,6 +1561,110 @@ class PolimiBot(Player):
         else:
             return f"Opponent's Remaining Alive Pokemon: {opponent_unfainted_num}\nRevealed Opponent's Team (Bench): No other Pokemon revealed yet.\n"
 
+    def _compute_effective_speed(
+        self,
+        battle: AbstractBattle,
+        mon: Pokemon,
+        is_player_side: bool,
+    ) -> tuple[int, list[str]]:
+        """Return (effective_speed, [list of modifier notes]) for mon in the current battle state.
+
+        Accounts for: stat stage boosts, Choice Scarf, Iron Ball, paralysis,
+        weather abilities (Swift Swim / Chlorophyll / Sand Rush / Slush Rush),
+        Surge Surfer, Tailwind, Booster Energy / Protosynthesis / Quark Drive.
+        Trick Room is NOT applied here — the caller decides turn order from the value.
+        """
+        from poke_env.environment.weather import Weather
+
+        effective_spe = mon.calculate_stats(battle_format=self.format).get("spe", 1)
+        notes: list[str] = []
+
+        # Stat stage boosts (+1..+6 or −1..−6)
+        spe_boost = mon.boosts.get("spe", 0)
+        if spe_boost > 0:
+            mult = (2 + spe_boost) / 2
+            effective_spe = int(effective_spe * mult)
+            notes.append(f"+{spe_boost} stage (×{mult:.2f})")
+        elif spe_boost < 0:
+            mult = 2 / (2 + abs(spe_boost))
+            effective_spe = int(effective_spe * mult)
+            notes.append(f"{spe_boost} stage (×{mult:.2f})")
+
+        # Resolve ability / item — fall back to known opponent team data
+        ability = (mon.ability or "").lower().replace(" ", "")
+        item = (mon.item or "").lower().replace(" ", "")
+        if not is_player_side:
+            known = self.get_known_opponent_team(battle)
+            if known:
+                species = self.denormalize_pokemon_name(mon.species)
+                data = known.get(species, {})
+                if not ability and "ability" in data:
+                    ability = data["ability"].lower().replace(" ", "")
+                if item in ("", "unknown", "unknown_item") and "item" in data:
+                    item = data["item"].lower().replace(" ", "")
+
+        # Item modifiers
+        if item == "choicescarf":
+            effective_spe = int(effective_spe * 1.5)
+            notes.append("Choice Scarf (×1.5)")
+        elif item == "ironball":
+            effective_spe = int(effective_spe * 0.5)
+            notes.append("Iron Ball (×0.5)")
+
+        # Paralysis (×0.5 in Gen 6+)
+        status_str = self.check_status(mon.status) if mon.status else None
+        if status_str == "paralyzed":
+            effective_spe = int(effective_spe * 0.5)
+            notes.append("Paralysis (×0.5)")
+
+        # Current weather
+        current_weather = None
+        if battle.weather:
+            try:
+                current_weather = next(iter(battle.weather.keys()))
+            except Exception:
+                pass
+
+        # Weather-doubling abilities
+        weather_ability_map: dict[str, list] = {
+            "swiftswim":   [Weather.RAINDANCE, Weather.PRIMORDIALSEA],
+            "chlorophyll": [Weather.SUNNYDAY, Weather.DESOLATELAND],
+            "sandrush":    [Weather.SANDSTORM],
+            "slushrush":   [Weather.HAIL, Weather.SNOW, Weather.SNOWSCAPE],
+        }
+        for wa, weathers in weather_ability_map.items():
+            if ability == wa and current_weather in weathers:
+                effective_spe *= 2
+                notes.append(f"{wa} in weather (×2)")
+                break
+
+        # Surge Surfer on Electric Terrain
+        field_names = {f.name for f in battle.fields} if battle.fields else set()
+        if ability == "surgesurfer" and "ELECTRIC_TERRAIN" in field_names:
+            effective_spe *= 2
+            notes.append("Surge Surfer on Electric Terrain (×2)")
+
+        # Tailwind (player side vs opponent side)
+        side_conds = battle.side_conditions if is_player_side else battle.opponent_side_conditions
+        if SideCondition.TAILWIND in side_conds:
+            effective_spe *= 2
+            notes.append("Tailwind (×2)")
+
+        # Booster Energy / Protosynthesis / Quark Drive — boost Speed ×1.5 when it is the highest non-HP stat
+        boost_active = (
+            item == "boosterenergy"
+            or (ability == "protosynthesis" and current_weather in [Weather.SUNNYDAY, Weather.DESOLATELAND])
+            or (ability == "quarkdrive" and "ELECTRIC_TERRAIN" in field_names)
+        )
+        if boost_active:
+            base_stats = mon.calculate_stats(battle_format=self.format)
+            non_hp = {k: v for k, v in base_stats.items() if k != "hp"}
+            if non_hp and max(non_hp, key=non_hp.get) == "spe":
+                effective_spe = int(effective_spe * 1.5)
+                notes.append(f"{ability or item} boosting Speed (×1.5)")
+
+        return int(effective_spe), notes
+
     def get_speed_prompt(self, mon: Pokemon, mon_opp: Pokemon) -> str:
         mon_stats = mon.calculate_stats(battle_format=self.format)
         mon_opp_stats = mon_opp.calculate_stats(battle_format=self.format)
@@ -1689,12 +1793,78 @@ class PolimiBot(Player):
                     pass
             raise ValueError(f"Could not extract valid JSON from response text: {response_text}")
 
+    def _compute_hazard_entry_damage(
+        self, battle: AbstractBattle, pokemon: Pokemon
+    ) -> tuple[float, str]:
+        """Return (hp_fraction_lost, human-readable description) for hazards on the player's side."""
+        side_conds = battle.side_conditions
+        if not side_conds:
+            return 0.0, ""
+
+        types = [t for t in (pokemon.types if hasattr(pokemon, "types") and pokemon.types else []) if t]
+        type_names = {t.name.upper() for t in types}
+        ability = (pokemon.ability or "").lower().replace(" ", "")
+        item = (pokemon.item or "").lower().replace(" ", "")
+
+        is_flying = "FLYING" in type_names
+        has_levitate = ability == "levitate"
+        has_air_balloon = item == "airballoon"
+        has_hdb = item == "heavydutyboots"
+        has_magic_guard = ability == "magicguard"
+
+        # Not grounded = immune to Spikes and Toxic Spikes
+        grounded = not (is_flying or has_levitate or has_air_balloon)
+
+        damage_fraction = 0.0
+        parts: list[str] = []
+
+        # Stealth Rock — hits all Pokemon; base 12.5% scaled by Rock type effectiveness
+        if SideCondition.STEALTH_ROCK in side_conds and not has_hdb and not has_magic_guard:
+            rock_chart: dict[str, float] = {
+                "FLYING": 2.0, "FIRE": 2.0, "ICE": 2.0, "BUG": 2.0,
+                "FIGHTING": 0.5, "GROUND": 0.5, "STEEL": 0.5,
+            }
+            multiplier = 1.0
+            for t in type_names:
+                multiplier *= rock_chart.get(t, 1.0)
+            sr_dmg = 0.125 * multiplier
+            damage_fraction += sr_dmg
+            parts.append(f"Stealth Rock: -{sr_dmg * 100:.4g}% HP")
+
+        # Spikes — grounded only
+        if grounded and not has_hdb and not has_magic_guard:
+            layers = side_conds.get(SideCondition.SPIKES, 0)
+            if layers:
+                spikes_dmg = {1: 1 / 8, 2: 1 / 6, 3: 1 / 4}.get(min(layers, 3), 1 / 4)
+                damage_fraction += spikes_dmg
+                parts.append(f"Spikes ({layers}L): -{spikes_dmg * 100:.4g}% HP")
+
+        # Toxic Spikes — grounded only; Poison-type absorbs, Steel-type immune
+        if grounded and not has_hdb:
+            layers = side_conds.get(SideCondition.TOXIC_SPIKES, 0)
+            if layers:
+                if "POISON" in type_names:
+                    parts.append("Toxic Spikes: absorbed (Poison-type safe switch-in)")
+                elif "STEEL" in type_names or ability in ("immunity", "poisonheal"):
+                    parts.append("Toxic Spikes: immune")
+                else:
+                    status = "badly poisoned" if layers >= 2 else "poisoned"
+                    parts.append(f"Toxic Spikes ({layers}L): will be {status} on entry")
+
+        return damage_fraction, ", ".join(parts)
+
     def _get_available_switches_list(self, battle: AbstractBattle) -> str:
         available_switches_list = []
         for pokemon in battle.available_switches:
             pokemon_name = self.denormalize_pokemon_name(pokemon.species)
             hp_pct = round(pokemon.current_hp_fraction * 100, 1)
-            available_switches_list.append(f"  - {pokemon_name} (HP: {hp_pct}%)")
+            hz_frac, hz_desc = self._compute_hazard_entry_damage(battle, pokemon)
+            entry = f"  - {pokemon_name} (HP: {hp_pct}%"
+            if hz_desc:
+                hp_after = max(0.0, pokemon.current_hp_fraction - hz_frac) * 100
+                entry += f", Entry hazard cost: {hz_desc} → effective HP after entry: {hp_after:.1f}%"
+            entry += ")"
+            available_switches_list.append(entry)
         return (
             "\n".join(available_switches_list)
             if available_switches_list
@@ -1736,6 +1906,8 @@ class PolimiBot(Player):
         opponent_team_prompt: str,
         player_team_prompt: str,
         switches_options: str,
+        entry_message: str = "Your active Pokemon is fainted. You must choose a Pokemon to switch in.",
+        outcome_summary: str = "",
     ) -> str:
         switch_prompt = ""
         if side_conditions_prompt:
@@ -1743,13 +1915,15 @@ class PolimiBot(Player):
         switch_prompt += (
             opponent_active_pokemon_prompt + "\n" + opponent_team_prompt + "\n" + player_team_prompt + "\n"
         )
+        if outcome_summary:
+            switch_prompt += f"\nDAMAGE CALCULATOR RESULTS (use these numbers to evaluate each switch-in):\n{outcome_summary}\n"
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
-        switch_prompt += """\nYour active Pokemon is fainted. You must choose a Pokemon to switch in.
+        switch_prompt += f"""\n{entry_message}
 Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
-{
+{{
   "explanation": "A detailed explanation of why you chose to switch to this pokemon, considering the opponent's pokemon, current battle state, and your strategy",
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list)"
-}"""
+}}"""
         return switch_prompt
 
     def _build_move_prompt(
@@ -1770,6 +1944,64 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         )
         if terastallization_prompt:
             move_prompt += terastallization_prompt + "\n"
+
+        # Speed order for this turn (accounts for all in-battle modifiers)
+        if battle.active_pokemon and battle.opponent_active_pokemon:
+            try:
+                active_spe, active_notes = self._compute_effective_speed(
+                    battle, battle.active_pokemon, is_player_side=True
+                )
+                opp_spe, opp_notes = self._compute_effective_speed(
+                    battle, battle.opponent_active_pokemon, is_player_side=False
+                )
+                active_name = self.denormalize_pokemon_name(battle.active_pokemon.species)
+                opp_name = self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)
+                active_note_str = f" [{', '.join(active_notes)}]" if active_notes else ""
+                opp_note_str    = f" [{', '.join(opp_notes)}]" if opp_notes else ""
+
+                field_names = {f.name for f in battle.fields} if battle.fields else set()
+                trick_room = "TRICK_ROOM" in field_names
+
+                if trick_room:
+                    if active_spe < opp_spe:
+                        order = (
+                            f"YOU MOVE FIRST under Trick Room "
+                            f"({active_name}: {active_spe}{active_note_str} slower than "
+                            f"{opp_name}: {opp_spe}{opp_note_str})"
+                        )
+                    elif active_spe > opp_spe:
+                        order = (
+                            f"OPPONENT MOVES FIRST under Trick Room "
+                            f"({opp_name}: {opp_spe}{opp_note_str} slower than "
+                            f"{active_name}: {active_spe}{active_note_str})"
+                        )
+                    else:
+                        order = f"SPEED TIE under Trick Room (both at {active_spe}) — coin flip"
+                else:
+                    if active_spe > opp_spe:
+                        order = (
+                            f"YOU MOVE FIRST "
+                            f"({active_name}: {active_spe}{active_note_str} > "
+                            f"{opp_name}: {opp_spe}{opp_note_str}). "
+                            "Your attack resolves before you take damage."
+                        )
+                    elif active_spe < opp_spe:
+                        order = (
+                            f"OPPONENT MOVES FIRST "
+                            f"({opp_name}: {opp_spe}{opp_note_str} > "
+                            f"{active_name}: {active_spe}{active_note_str}). "
+                            "You take damage before your move resolves."
+                        )
+                    else:
+                        order = (
+                            f"SPEED TIE — coin flip (both at {active_spe})"
+                        )
+
+                priority_note = " Priority moves (Quick Attack, Sucker Punch, Fake Out, etc.) ignore speed and always go first." if not trick_room else ""
+                move_prompt += f"\n*** SPEED ORDER THIS TURN: {order}.{priority_note} ***\n"
+            except Exception:
+                pass
+
         move_prompt += f"\nAvailable moves:\n{moves_options}\n"
 
         if battle.can_tera:
@@ -1797,6 +2029,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         player_team_prompt: str,
         switches_options: str,
         just_switched_in: bool = False,
+        outcome_summary: str = "",
     ) -> str:
         switch_prompt = ""
         if side_conditions_prompt:
@@ -1804,11 +2037,15 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         switch_prompt += (
             player_active_pokemon_prompt + "\n" + opponent_active_pokemon_prompt + "\n" + opponent_team_prompt + "\n" + player_team_prompt + "\n"
         )
+
+        if outcome_summary:
+            switch_prompt += f"\nDAMAGE CALCULATOR RESULTS (use these numbers to evaluate each option):\n{outcome_summary}\n"
+
         switch_prompt += f"\nAvailable switches:\n{switches_options}\n"
-        
+
         if just_switched_in:
             switch_prompt += "\nWARNING: Your active Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider using a MOVE (by returning 'Nothing') instead of switching.\n"
-            
+
         switch_prompt += """\nIf you believe that using a move is absolutely better and there is no valid reason to switch, you can set "switch" to "Nothing".
 Provide your response in VALID JSON format with the following structure. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
 {
@@ -1816,6 +2053,118 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
   "switch": "The name of the pokemon you want to switch to (must be one from the available switches list, or 'Nothing' if you strongly prefer moving)"
 }"""
         return switch_prompt
+
+    def _compute_merger_outcome_summary(self, battle: AbstractBattle) -> str:
+        """Run damage-calculator calls for all move/switch candidates and return a compact outcome table."""
+        active = battle.active_pokemon
+        opponent_mon = battle.opponent_active_pokemon
+        if not active or not opponent_mon:
+            return ""
+
+        futures_map: dict = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            for move in battle.available_moves:
+                key = ("move_atk", move.id)
+                futures_map[pool.submit(self.turns_to_ko, battle, move.id, 9, False)] = key
+
+            for move in (opponent_mon.moves or {}).values():
+                key = ("opp_vs_active", move.id)
+                futures_map[pool.submit(self.turns_to_ko, battle, move.id, 9, True)] = key
+
+            for sw_mon in battle.available_switches:
+                for move in (opponent_mon.moves or {}).values():
+                    key = ("opp_vs_switch", sw_mon.species, move.id)
+                    futures_map[pool.submit(
+                        self.turns_to_ko, battle, move.id, 9, True, None, sw_mon
+                    )] = key
+                for move in (sw_mon.moves or {}).values():
+                    key = ("switch_atk", sw_mon.species, move.id)
+                    futures_map[pool.submit(
+                        self.turns_to_ko, battle, move.id, 9, False, sw_mon, None
+                    )] = key
+
+            raw: dict = {}
+            for fut in concurrent.futures.as_completed(futures_map):
+                key = futures_map[fut]
+                try:
+                    raw[key] = fut.result()
+                except Exception:
+                    raw[key] = None
+
+        lines: list[str] = []
+        active_name = self.denormalize_pokemon_name(active.species)
+        opp_name = self.denormalize_pokemon_name(opponent_mon.species)
+
+        # MOVE outcome: best attacker turn-count and opponent's fastest KO threat
+        best_atk_turns: int | None = None
+        best_atk_name: str | None = None
+        for move in battle.available_moves:
+            val = raw.get(("move_atk", move.id))
+            if isinstance(val, int) and (best_atk_turns is None or val < best_atk_turns):
+                best_atk_turns = val
+                best_atk_name = self.denormalize_move_name(move.id)
+
+        opp_threat_turns: int | None = None
+        opp_threat_name: str | None = None
+        for move in (opponent_mon.moves or {}).values():
+            val = raw.get(("opp_vs_active", move.id))
+            if isinstance(val, int) and (opp_threat_turns is None or val < opp_threat_turns):
+                opp_threat_turns = val
+                opp_threat_name = self.denormalize_move_name(move.id)
+
+        lines.append(f"MOVE (stay with {active_name} and attack):")
+        if best_atk_turns is not None:
+            lines.append(f"  Your best attack — {best_atk_name}: KOs {opp_name} in {best_atk_turns} turn(s)")
+        else:
+            lines.append("  Your best attack: damage calc unavailable")
+        if opp_threat_turns is not None:
+            lines.append(f"  Opponent's biggest threat — {opp_threat_name}: KOs {active_name} in {opp_threat_turns} turn(s)")
+        elif not opponent_mon.moves:
+            lines.append("  Opponent's threat: no moves revealed yet")
+        else:
+            lines.append("  Opponent's threat: damage calc unavailable")
+
+        # SWITCH outcomes: per candidate
+        if battle.available_switches:
+            lines.append(f"\nSWITCH (replace {active_name}):")
+            for sw_mon in battle.available_switches:
+                sw_name = self.denormalize_pokemon_name(sw_mon.species)
+
+                sw_opp_threat: int | None = None
+                sw_opp_move: str | None = None
+                for move in (opponent_mon.moves or {}).values():
+                    val = raw.get(("opp_vs_switch", sw_mon.species, move.id))
+                    if isinstance(val, int) and (sw_opp_threat is None or val < sw_opp_threat):
+                        sw_opp_threat = val
+                        sw_opp_move = self.denormalize_move_name(move.id)
+
+                sw_atk_turns: int | None = None
+                sw_atk_name: str | None = None
+                for move in (sw_mon.moves or {}).values():
+                    val = raw.get(("switch_atk", sw_mon.species, move.id))
+                    if isinstance(val, int) and (sw_atk_turns is None or val < sw_atk_turns):
+                        sw_atk_turns = val
+                        sw_atk_name = self.denormalize_move_name(move.id)
+
+                lines.append(f"  {sw_name}:")
+                hz_frac, hz_desc = self._compute_hazard_entry_damage(battle, sw_mon)
+                if hz_desc:
+                    hp_after = max(0.0, sw_mon.current_hp_fraction - hz_frac) * 100
+                    lines.append(f"    Entry hazard cost: {hz_desc} → effective HP on arrival: {hp_after:.1f}%")
+                if sw_opp_threat is not None:
+                    lines.append(f"    Durability: KO'd by {opp_name}'s {sw_opp_move} in {sw_opp_threat} turn(s)")
+                elif not opponent_mon.moves:
+                    lines.append("    Durability: no opponent moves revealed yet")
+                else:
+                    lines.append("    Durability: damage calc unavailable")
+                if sw_atk_turns is not None:
+                    lines.append(f"    Offense: KOs {opp_name} in {sw_atk_turns} turn(s) using {sw_atk_name}")
+                elif not sw_mon.moves:
+                    lines.append("    Offense: no moves revealed yet")
+                else:
+                    lines.append("    Offense: damage calc unavailable")
+
+        return "\n".join(lines)
 
     def _build_merger_prompt(
         self,
@@ -1830,52 +2179,56 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         move_response_raw: str,
         switch_response_raw: str,
         just_switched_in: bool = False,
+        outcome_summary: str = "",
     ) -> str:
         tera_context = ""
         if terastallization_prompt:
             tera_context = f"\n{terastallization_prompt}\n"
 
-        first_turn_warning = ""
-        if just_switched_in:
-            first_turn_warning = "\nWARNING: Your active Pokemon JUST switched in! Switching it out now wastes a turn and gives the opponent free momentum. You should ALMOST NEVER switch out immediately, unless staying in guarantees a KO without any benefit. Strongly consider choosing the MOVE action instead of switching.\n"
+        merger_prompt = "You are a competitive Pokemon battler deciding between two proposed actions.\n\n"
 
-        merger_prompt = f"""You are a pokemon battler that targets to win the pokemon battle. \n\n"""
-        
         if side_conditions_prompt:
             merger_prompt += side_conditions_prompt + "\n"
-            
+
         merger_prompt += f"""{player_active_pokemon_prompt}
 
 {opponent_active_pokemon_prompt}
 
 {opponent_team_prompt}
-{tera_context}
-You have two possible actions to choose from:
+{tera_context}"""
+
+        if outcome_summary:
+            merger_prompt += f"""DAMAGE CALCULATOR RESULTS (primary evidence — trust these numbers over narrative reasoning):
+{outcome_summary}
+
+"""
+
+        just_switched_note = ""
+        if just_switched_in:
+            just_switched_note = "\n  - Your active Pokemon JUST switched in this turn. Switching again costs 2 turns of momentum — require a clear numerical advantage to justify it."
+
+        merger_prompt += f"""Two actions are proposed by sub-agents:
 
 1) MOVE ACTION:
 Available moves:
 {moves_options}
-Response: {move_response_raw}
+Sub-agent reasoning: {move_response_raw}
 
 2) SWITCH ACTION:
 Available switches:
 {switches_options}
-Response: {switch_response_raw}
+Sub-agent reasoning: {switch_response_raw}
 
-Analyze both options considering:
-- The opponent's pokemon type, HP, and predicted moves
-- Type advantages/disadvantages
-- Terastallization opportunities and threats
-- Current battle momentum and strategy
-- Which action gives you the best chance to win
-{first_turn_warning}
-CRITICAL STRATEGY RULE: Switching out gives the opponent a completely FREE turn to attack or set up. You lose all momentum. You MUST heavily favor the MOVE ACTION unless the active Pokemon is in immediate danger of being knocked out without doing any damage, or if the switch provides an overwhelming tactical advantage. Do not switch just because a move is neutral or not super-effective.
+DECISION RULE:
+  - Switching hands the opponent a free attack, so default to MOVING.
+  - Switch only when the calculator results show a clear advantage: the switch-in survives MORE turns than the active Pokemon AND threatens a faster or equal KO, OR the active Pokemon is KO'd in 1 turn with no meaningful damage in return.
+  - Consider win conditions, type immunities, and positioning for factors the calculator cannot capture.{just_switched_note}
 
-Choose the action with the better explanation that would lead you to win the battle.
+Base your decision on the damage calculator numbers first. Use the sub-agent reasoning only to factor in anything the numbers miss.
 
-Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes inside the explanation string to ensure valid JSON!
+Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes inside the explanation string!
 {{
-  "explanation": "Detailed reasoning comparing both options and why one is superior. Acknowledge the cost of losing momentum if you choose to switch.",
+  "explanation": "State the KO-race numbers for staying vs each switch option. Explain which action has the better expected outcome.",
   "choice": "move" or "switch"
 }}"""
         return merger_prompt
@@ -1957,10 +2310,28 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         return None
 
     def choose_max_damage_move(self, battle: AbstractBattle):
-        if battle.available_moves:
-            best_move = max(battle.available_moves, key=lambda move: move.base_power)
-            return self.create_order(best_move)
-        return self.choose_random_move(battle)
+        if not battle.available_moves:
+            return self.choose_random_move(battle)
+
+        def ko_turns(move) -> int:
+            result = self.turns_to_ko(battle, move.id)
+            if isinstance(result, int) and result > 0:
+                return result
+            # Non-damaging or calc error: deprioritise below damaging moves
+            return 999 if move.base_power > 0 else 9999
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(ko_turns, move): move for move in battle.available_moves}
+            scores: dict[str, int] = {}
+            for fut in concurrent.futures.as_completed(futures):
+                move = futures[fut]
+                try:
+                    scores[move.id] = fut.result()
+                except Exception:
+                    scores[move.id] = 999 if move.base_power > 0 else 9999
+
+        best_move = min(battle.available_moves, key=lambda m: scores.get(m.id, 9999))
+        return self.create_order(best_move)
 
     def choose_move(self, battle: AbstractBattle) -> BattleOrder:
         system_prompt = self.get_system_prompt(battle)
@@ -2017,6 +2388,31 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
                 return parsed_order
             return self.choose_random_move(battle)
 
+        # Pivot switch: U-turn / Volt Switch / Flip Turn used — no moves left, must switch
+        if not battle.available_moves and has_available_switches:
+            if len(battle.available_switches) == 1:
+                return self.create_order(battle.available_switches[0])
+
+            opponent_team_prompt = self.get_opponent_team_prompt(battle, enhanced=True)
+            player_team_prompt = self.get_player_team_prompt(battle)
+            switches_options = self._get_available_switches_list(battle)
+            outcome_summary = self._compute_merger_outcome_summary(battle)
+            switch_prompt = self._build_forced_switch_prompt(
+                side_conditions_prompt,
+                opponent_active_pokemon_prompt,
+                opponent_team_prompt,
+                player_team_prompt,
+                switches_options,
+                entry_message="Your Pokemon used a pivot move (U-turn / Volt Switch / Flip Turn / etc.) and must now switch out. Choose the best Pokemon to bring in against the current opponent.",
+                outcome_summary=outcome_summary,
+            )
+
+            switch_response_raw = self.llm.get_LLM_action(system_prompt, switch_prompt, model=self.backend, json_format=True, battle=battle)[0]
+            parsed_order = self._parse_switch_choice(battle, switch_response_raw, switch_prompt)
+            if parsed_order:
+                return parsed_order
+            return self.choose_random_move(battle)
+
         player_active_pokemon_prompt = self.get_active_pokemon_prompt(
             battle, opponent=False, enhanced=False
         )
@@ -2049,6 +2445,11 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
                 return parsed_order
             return self.choose_random_move(battle)
 
+        # Compute KO-race data before building the switch prompt so the sub-agent
+        # sees the same numbers as the merger judge. The thread-pool inside the method
+        # overlaps with nothing here, but it's ~150ms vs 2-5s LLM calls so no issue.
+        outcome_summary = self._compute_merger_outcome_summary(battle)
+
         switches_options = self._get_available_switches_list(battle)
         switch_prompt = self._build_switch_prompt(
             battle,
@@ -2059,6 +2460,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             player_team_prompt,
             switches_options,
             just_switched_in=just_switched_in,
+            outcome_summary=outcome_summary,
         )
 
         # print("----- Move Prompt -----")
@@ -2069,22 +2471,22 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             future_move = executor.submit(
-                self.llm.get_LLM_action, 
-                system_prompt=system_prompt, 
-                user_prompt=move_prompt, 
+                self.llm.get_LLM_action,
+                system_prompt=system_prompt,
+                user_prompt=move_prompt,
                 model=self.backend,
                 json_format=True,
                 battle=battle
             )
             future_switch = executor.submit(
-                self.llm.get_LLM_action, 
-                system_prompt=system_prompt, 
-                user_prompt=switch_prompt, 
+                self.llm.get_LLM_action,
+                system_prompt=system_prompt,
+                user_prompt=switch_prompt,
                 model=self.backend,
                 json_format=True,
                 battle=battle
             )
-            
+
             move_response_raw = future_move.result()[0]
             switch_response_raw = future_switch.result()[0]
 
@@ -2114,6 +2516,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             move_response_raw,
             switch_response_raw,
             just_switched_in=just_switched_in,
+            outcome_summary=outcome_summary,
         )
 
         # print("----- Merger Prompt -----")
