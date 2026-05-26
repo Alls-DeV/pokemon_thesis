@@ -39,6 +39,8 @@ parser.add_argument("--opponent_device", type=int, default=0)
 
 # Shared arguments
 parser.add_argument("--temperature", type=float, default=0.3)
+parser.add_argument("--voting_n", type=int, default=1,
+    help="Number of LLM votes per prompt for PolimiBot majority voting (1 = disabled)")
 parser.add_argument("--battle_format", default="gen9ou", choices=["gen8randombattle", "gen8ou", "gen9ou", "gen9randombattle", "gen9vgc2024regg"])
 parser.add_argument("--log_dir", type=str, default="./battle_log/one_vs_one")
 parser.add_argument("--N", type=int, default=1)
