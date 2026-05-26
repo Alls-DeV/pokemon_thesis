@@ -54,8 +54,17 @@ try {
   const turns_max = Math.ceil(defenderHP / min); // worst case (low roll each time)
   const turns_avg = Math.ceil(defenderHP / avg);
 
-  // Output only the average number of turns to KO as requested
-  process.stdout.write(JSON.stringify({turns_avg}));
+  // Output turns-to-KO and per-hit damage range as % of defender max HP
+  const defenderMaxHP = defender.stats.hp || 1;
+  process.stdout.write(JSON.stringify({
+    turns_avg,
+    turns_min,
+    turns_max,
+    min_pct: (min / defenderMaxHP) * 100,
+    max_pct: (max / defenderMaxHP) * 100,
+    avg_pct: (avg / defenderMaxHP) * 100,
+    defender_max_hp: defenderMaxHP,
+  }));
 } catch (e) {
   process.stderr.write(String(e.stack || e));
   process.exit(1);
