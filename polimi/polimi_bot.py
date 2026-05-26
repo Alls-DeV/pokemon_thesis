@@ -1011,8 +1011,12 @@ class PolimiBot(Player):
             is_magic_room = "MAGIC_ROOM" in field_names
             is_wonder_room = "WONDER_ROOM" in field_names
 
-            atk_side = battle.side_conditions
-            def_side = battle.opponent_side_conditions
+            if attacker_is_opponent:
+                atk_side = battle.opponent_side_conditions
+                def_side = battle.side_conditions
+            else:
+                atk_side = battle.side_conditions
+                def_side = battle.opponent_side_conditions
 
             def side_flags(side_dict):
                 return {
