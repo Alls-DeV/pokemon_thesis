@@ -54,6 +54,10 @@ class PolimiBot(Player):
         self.team_idx = team_idx
         self.backend = backend
         self._last_active_pokemon = {}
+        self._opp_hp_snapshot = {}    # tag -> (raw_species, hp_fraction) before our last move
+        self._my_last_move = {}       # tag -> denormalized move name used last turn
+        self._my_last_attacker = {}   # tag -> attacker_data dict from last turn
+        self._damage_evidence = {}    # tag -> {raw_species -> {attacker_data, move_name, observed_damage_pct}}
         if "gpt" in backend and not backend.startswith("openai/"):
             self.llm = GPTPlayer(api_key)
             self.llm.is_polimi = True
@@ -663,11 +667,14 @@ class PolimiBot(Player):
                 normalized_move = self.denormalize_move_name(move_id)
                 observed_moves.append(normalized_move)
 
-            # Get predictions
+            # Get predictions (include damage evidence for EV-spread inference if available)
+            _dmg_ev = self._damage_evidence.get(battle.battle_tag, {}).get(species)
             predictions = self.bayesian_predictor.predict_component_probabilities(
                 species=normalized_species,
                 teammates=revealed_opponents,
                 observed_moves=observed_moves,
+                attacker_data=_dmg_ev["attacker_data"] if _dmg_ev else None,
+                observed_damage_pct=_dmg_ev["observed_damage_pct"] if _dmg_ev else None,
             )
 
             # Use highest probability predictions to fill missing information
@@ -1175,6 +1182,82 @@ class PolimiBot(Player):
 
         return player_side_condition_prompt + opponent_side_condition_prompt
 
+    def _build_attacker_data(self, battle: AbstractBattle):
+        """Build a @smogon/calc compatible dict for our currently active pokemon."""
+        mon = battle.active_pokemon
+        if not mon:
+            return None
+        species_name = self.denormalize_pokemon_name(mon.species)
+        team_source = getattr(self, "team_json_data", None)
+
+        try:
+            observed = list(mon.moves.values()) if mon.moves else []
+            ev_array, nature = mon.guess_stats(battle=battle, observed_moves=observed)
+        except Exception:
+            ev_array, nature = [0] * 6, "Hardy"
+        if not isinstance(ev_array, (list, tuple)) or len(ev_array) != 6:
+            ev_array = [0] * 6
+
+        stat_keys = ["hp", "atk", "def", "spa", "spd", "spe"]
+        evs = {k: int(ev_array[i]) for i, k in enumerate(stat_keys)}
+
+        if team_source and species_name in team_source:
+            mon_data = team_source[species_name]
+            if "nature" in mon_data:
+                nature = mon_data["nature"]
+            if "evs" in mon_data:
+                evs = {k: mon_data["evs"].get(k, 0) for k in stat_keys}
+
+        item = mon.item if mon.item and mon.item not in ("unknown_item",) else None
+        if team_source and species_name in team_source:
+            item = item or team_source[species_name].get("item")
+
+        ability = mon.ability
+        if team_source and species_name in team_source and not ability:
+            ability = team_source[species_name].get("ability", "")
+
+        boosts = {k: v for k, v in mon.boosts.items() if k in ["atk", "def", "spa", "spd", "spe"] and v}
+        status_map = {"burnt": "brn", "paralyzed": "par", "poisoned": "psn", "toxic": "tox", "frozen": "frz", "sleeping": "slp"}
+        raw_status = self.check_status(mon.status) or None
+        if raw_status == "fainted":
+            raw_status = None
+        calc_status = status_map.get(raw_status) if raw_status else None
+
+        return {
+            "species": species_name,
+            "level": mon.level,
+            "item": item,
+            "ability": ability,
+            "nature": nature if nature else "Hardy",
+            "evs": evs,
+            "ivs": {k: 31 for k in stat_keys},
+            "boosts": boosts or None,
+            "status": calc_status,
+        }
+
+    def _update_damage_evidence(self, battle: AbstractBattle):
+        """Compute damage dealt last turn and store it for Bayesian EV-spread inference."""
+        tag = battle.battle_tag
+        opp = battle.opponent_active_pokemon
+
+        if (opp and tag in self._opp_hp_snapshot
+                and tag in self._my_last_move and tag in self._my_last_attacker):
+            prev_species, prev_hp = self._opp_hp_snapshot[tag]
+            curr_hp = opp.current_hp_fraction
+            if prev_species == opp.species and curr_hp < prev_hp - 0.005:
+                dmg_pct = (prev_hp - curr_hp) * 100.0
+                self._damage_evidence.setdefault(tag, {})[opp.species] = {
+                    "attacker_data": self._my_last_attacker[tag],
+                    "move_name": self._my_last_move[tag],
+                    "observed_damage_pct": dmg_pct,
+                }
+
+        if opp:
+            self._opp_hp_snapshot[tag] = (opp.species, opp.current_hp_fraction)
+        attacker_data = self._build_attacker_data(battle)
+        if attacker_data:
+            self._my_last_attacker[tag] = attacker_data
+
     def get_player_team_prompt(self, battle: AbstractBattle) -> str:
         """Create a prompt with each pokemon of the player that is alive"""
         team_info = []
@@ -1460,11 +1543,14 @@ class PolimiBot(Player):
                         revealed_opponents.append(self.denormalize_pokemon_name(p.species))
                 
                 observed_moves = [self.denormalize_move_name(m) for m in known_moves]
-                
+
+                _dmg_ev = self._damage_evidence.get(battle.battle_tag, {}).get(species)
                 predictions = self.bayesian_predictor.predict_component_probabilities(
                     species=normalized_species,
                     teammates=revealed_opponents,
                     observed_moves=observed_moves,
+                    attacker_data=_dmg_ev["attacker_data"] if _dmg_ev else None,
+                    observed_damage_pct=_dmg_ev["observed_damage_pct"] if _dmg_ev else None,
                 )
                 
                 if "abilities" in predictions and predictions["abilities"] and ability_name == "Unknown":
@@ -2311,6 +2397,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
                 if move.id.lower().replace(" ", "").replace(
                     "-", ""
                 ) == chosen_move_name.lower().replace(" ", "").replace("-", ""):
+                    self._my_last_move[battle.battle_tag] = self.denormalize_move_name(move.id)
                     return BattleOrder(
                         move,
                         terastallize=(
@@ -2331,6 +2418,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
             if matches:
                 for move in battle.available_moves:
                     if move.id.lower().replace(" ", "").replace("-", "") == matches[0]:
+                        self._my_last_move[battle.battle_tag] = self.denormalize_move_name(move.id)
                         return BattleOrder(
                             move,
                             terastallize=(
@@ -2400,6 +2488,7 @@ Provide your response in VALID JSON format. IMPORTANT: Do not use double quotes 
         return self.create_order(best_move)
 
     def choose_move(self, battle: AbstractBattle) -> BattleOrder:
+        self._update_damage_evidence(battle)
         system_prompt = self.get_system_prompt(battle)
         side_conditions_prompt = self.get_side_conditions_prompt(battle)
         opponent_active_pokemon_prompt = self.get_active_pokemon_prompt(

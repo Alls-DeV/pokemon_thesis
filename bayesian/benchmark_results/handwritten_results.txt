@@ -1,0 +1,81 @@
+## Fig 2 — Species Prediction Accuracy vs. Revealed Pokémon (k)
+
+**Top-1 Accuracy**
+
+| k | Old (Naïve Bayes) | New (Redesigned) |
+|---|---|---|
+| 1 | ~0.0% | ~0.0% |
+| 2 | ~7.0% | ~7.0% |
+| 3 | ~13.3% | ~13.3% |
+| 4 | ~13.3% | ~16.7% |
+| 5 | ~13.3% | ~13.3% |
+
+**Top-3 Accuracy**
+
+| k | Old (Naïve Bayes) | New (Redesigned) |
+|---|---|---|
+| 1 | ~10.0% | ~3.3% |
+| 2 | ~23.3% | ~20.0% |
+| 3 | ~26.7% | ~17.0% |
+| 4 | ~17.0% | ~23.3% |
+| 5 | ~17.0% | ~17.0% |
+
+---
+
+## Fig 3 — Move Prediction Accuracy vs. Observed Moves (k)
+
+**Top-1 Accuracy**
+
+| k | Old (Naïve Bayes) | New (Redesigned) |
+|---|---|---|
+| 1 | ~27.8% | ~29.0% |
+| 2 | ~33.3% | ~28.5% |
+| 3 | ~31.7% | ~21.7% |
+
+**Top-3 Accuracy**
+
+| k | Old (Naïve Bayes) | New (Redesigned) |
+|---|---|---|
+| 1 | ~67.2% | ~65.0% |
+| 2 | ~62.8% | ~58.5% |
+| 3 | ~71.7% | ~62.8% |
+
+---
+
+## Fig 4 — Per-Component Prediction Accuracy (All 4 Moves Given)
+
+**Top-1 Accuracy**
+
+| Component | Old (Naïve Bayes) | New (Redesigned) |
+|---|---|---|
+| Item | 54.4% | 53.3% |
+| Ability | 93.3% | 93.3% |
+| Tera Type | 41.1% | 40.0% |
+
+**Top-3 Accuracy**
+
+| Component | Old (Naïve Bayes) | New (Redesigned) |
+|---|---|---|
+| Item | 85.6% | 83.9% |
+| Ability | 100.0% | 100.0% |
+| Tera Type | 77.8% | 78.3% |
+
+---
+
+Terminal output:
+Metric                              Old      New        Δ
+--------------------------------------------------------
+Species top-1 (avg k=1..5)         9.4%      8.1%   -1.3pp
+Species top-3 (avg k=1..5)        20.8%     17.4%   -3.5pp
+Move top-1 (avg k=1..3)           33.9%     27.2%   -6.7pp
+Move top-3 (avg k=1..3)           68.6%     64.7%   -3.9pp
+Item top-1                        55.8%     55.6%   -0.2pp
+Item top-3                        84.1%     83.9%   -0.2pp
+Ability top-1                     92.8%     92.8%   -0.0pp
+Tera Type top-1                   45.5%     45.4%   -0.1pp
+
+Confidence calibration (new predictor only):
+  Confident     acc=90.0%   n=119,990
+  Likely        acc=47.4%   n=85,704
+  Uncertain     acc=29.8%   n=45,466
+

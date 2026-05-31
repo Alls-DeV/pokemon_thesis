@@ -73,28 +73,20 @@ class PokemonPredictor:
         """
         return self.predictor.predict_pokemon_config(species, teammates, observed_moves)
     
-    def predict_component_probabilities(self, species: str, teammates: List[str] = None,
-                                      observed_moves: List[str] = None,
-                                      attacker_data: Optional[Dict] = None,
-                                      observed_damage_pct: Optional[float] = None) -> Dict:
+    def predict_component_probabilities(self, species: str, teammates: List[str] = None, 
+                                      observed_moves: List[str] = None) -> Dict:
         """
         Predict probabilities for individual components (moves, items, natures, abilities, EVs).
-
+        
         Args:
             species: The Pokemon species to predict for
             teammates: Known teammates (helps with prediction accuracy)
             observed_moves: Any moves already observed for this Pokemon
-            attacker_data: Our active pokemon's @smogon/calc data (enables EV spread inference)
-            observed_damage_pct: Damage dealt to this species last turn as % of max HP
-
+            
         Returns:
             Dictionary containing probability distributions for each component
         """
-        return self.predictor.predict_component_probabilities(
-            species, teammates, observed_moves,
-            attacker_data=attacker_data,
-            observed_damage_pct=observed_damage_pct,
-        )
+        return self.predictor.predict_component_probabilities(species, teammates, observed_moves)
     
     def get_usage_stats(self, top_n: int = 20) -> List[Tuple[str, int, float]]:
         """

@@ -49,78 +49,36 @@ def main():
         for species, count in predictor.species_counts.most_common(10):
             percentage = (count / predictor.total_teams) * 100
             print(f"  {species}: {count:,} ({percentage:.1f}%)")
-
-        # Archetype model summary
-        if predictor.archetype_model and predictor.archetype_model.is_trained:
-            print(f"\nArchetype model: {len(predictor.archetype_model._topic_labels)} archetypes")
-            print("Top archetypes by prior weight:")
-            arc_list = sorted(predictor.archetype_model._topic_labels.items(), key=lambda x: x[0])
-            prior = predictor.archetype_model._prior
-            arc_with_weight = [(prior[tid], label) for tid, label in arc_list]
-            arc_with_weight.sort(reverse=True)
-            for w, label in arc_with_weight[:8]:
-                print(f"  [{w:.3f}] {label}")
-
+        
         # Test predictions
         print(f"\n{'='*40}")
         print("TESTING PREDICTIONS")
         print(f"{'='*40}")
-
-        # Test case 1: Popular core — species + archetypes
+        
+        # Test case 1: Popular core
         test_revealed = ["Kingambit", "Gholdengo"]
         print(f"\nGiven revealed Pokemon: {test_revealed}")
-
+        
         predictions = predictor.predict_unrevealed_pokemon(test_revealed, max_predictions=5)
         if predictions:
             print("Most likely unrevealed teammates:")
             for species, prob in predictions:
                 print(f"  {species}: {prob:.4f}")
-
-            # Archetype inference for the core
-            if predictor.archetype_model and predictor.archetype_model.is_trained:
-                arcs = predictor.archetype_model.infer_archetypes(test_revealed)
-                print("Inferred archetypes:")
-                for label, w in arcs[:3]:
-                    print(f"  [{w:.3f}] {label}")
-
-            # Component probabilities for top prediction
+            
+            # Test config prediction
             test_species = predictions[0][0]
-            comp = predictor.predict_component_probabilities(
-                test_species, teammates=test_revealed
-            )
-            print(f"\nComponent predictions for {test_species}:")
-            for component in ("items", "abilities", "tera_types"):
-                top3 = comp.get(component, [])[:3]
-                if top3:
-                    vals = ", ".join(f"{n}({p:.2f})" for n, p in top3)
-                    print(f"  {component}: {vals}")
-            moves_top = comp.get("moves", [])[:4]
-            if moves_top:
-                vals = ", ".join(f"{n}({p:.2f})" for n, p in moves_top)
-                print(f"  moves: {vals}")
-
-            # Summary block
-            summary = comp.get("summary", {})
-            if summary:
-                print(f"  Summary confidence:")
-                for comp_name, s in summary.items():
-                    if comp_name in ("items", "abilities", "tera_types"):
-                        top_name, top_prob = s["top"]
-                        print(f"    {comp_name}: {top_name} ({top_prob:.2f}) [{s['confidence']}]")
-
-            # Full config (top-1 assembly)
             config = predictor.predict_pokemon_config(test_species, test_revealed)
-            print(f"\nTop-1 assembled config for {test_species}:")
+            print(f"\nPredicted config for {test_species}:")
             for key, value in config.items():
-                if key not in ("probability", "species"):
+                if key not in ['probability', 'species']:
                     print(f"  {key}: {value}")
             print(f"  confidence: {config.get('probability', 0):.4f}")
-
+        
         # Test case 2: Less common core
         test_revealed2 = ["Zapdos", "Pecharunt"]
         print(f"\n{'-'*40}")
         print(f"Given revealed Pokemon: {test_revealed2}")
-
+        
         predictions2 = predictor.predict_unrevealed_pokemon(test_revealed2, max_predictions=5)
         if predictions2:
             print("Most likely unrevealed teammates:")
