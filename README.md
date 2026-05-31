@@ -90,10 +90,6 @@ Special cases that bypass the full flow:
 
 `--voting_n N` runs each sub-agent call N times in parallel. The most-voted `BattleOrder` (by action message string) is used. A majority of `"Nothing"` switch votes short-circuits to the move immediately, without calling the Merger.
 
-### Known Opponent Team Matching
-
-Before using the Bayesian predictor, the bot attempts to identify the opponent's exact team by filtering the `polimi/teams_json/` library against revealed species and observed moves. If a match is found, exact item / ability / moves / tera data is used directly in prompts and in `turns_to_ko`.
-
 ---
 
 ## Bayesian Predictor
