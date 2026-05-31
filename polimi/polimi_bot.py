@@ -406,47 +406,6 @@ class PolimiBot(Player):
         spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", move_id)
         return spaced.title()
 
-    def get_known_opponent_team(self, battle: AbstractBattle):
-        if not hasattr(self, 'known_opponent_teams'):
-            self.known_opponent_teams = []
-            teams_dir = Path(__file__).parent / "teams_json"
-            if teams_dir.exists():
-                for team_file in teams_dir.glob("*.json"):
-                    try:
-                        with open(team_file, "r") as f:
-                            self.known_opponent_teams.append(json.load(f))
-                    except Exception as e:
-                        print(f"Error loading {team_file}: {e}")
-
-        valid_teams = self.known_opponent_teams.copy()
-        
-        for pokemon in battle.opponent_team.values():
-            if not pokemon.species:
-                continue
-            species_name = self.denormalize_pokemon_name(pokemon.species)
-            
-            next_valid = []
-            for team in valid_teams:
-                if species_name not in team:
-                    continue
-                
-                team_mon_data = team[species_name]
-                moves_match = True
-                if hasattr(pokemon, "moves") and pokemon.moves:
-                    team_moves_normalized = [m.lower().replace(" ", "").replace("-", "") for m in team_mon_data.get("moves", [])]
-                    for move_id in pokemon.moves.keys():
-                        norm_move = move_id.lower().replace(" ", "").replace("-", "")
-                        if norm_move not in team_moves_normalized:
-                            moves_match = False
-                            break
-                if moves_match:
-                    next_valid.append(team)
-            valid_teams = next_valid
-            
-        if valid_teams:
-            return valid_teams[0]
-        return None
-
     def get_active_pokemon_prompt(
         self, battle: AbstractBattle, opponent: bool, enhanced: bool
     ) -> str:
@@ -587,67 +546,7 @@ class PolimiBot(Player):
         elif not opponent and self.team_json_data and self.denormalize_pokemon_name(species) in self.team_json_data:
             tera_type = self.team_json_data[self.denormalize_pokemon_name(species)].get("tera", "Unknown")
 
-        # Enhanced predictions if requested and available
-        matched_team = None
-        if enhanced and opponent:
-            matched_team = self.get_known_opponent_team(battle)
-
-        if enhanced and opponent and matched_team:
-            normalized_species = self.denormalize_pokemon_name(species)
-            if normalized_species in matched_team:
-                team_data = matched_team[normalized_species]
-                
-                if "tera" in team_data and tera_type == "Unknown":
-                    tera_type = team_data["tera"]
-                    
-                if "item" in team_data and item_name == "unknown_item":
-                    best_item = team_data["item"]
-                    normalized_best_item = best_item.lower().replace(" ", "")
-                    item_effect = "" if normalized_best_item not in self.item_effect else f" ({self.item_effect[normalized_best_item]['effect']})"
-                    item_name = f"{best_item}"
-                    
-                if "ability" in team_data and ability_name == "Unknown":
-                    best_ability = team_data["ability"]
-                    normalized_best_ability = best_ability.lower().replace(" ", "")
-                    ability_effect = "" if normalized_best_ability not in self.ability_effect else f" ({self.ability_effect[normalized_best_ability]['effect']})"
-                    ability_name = f"{best_ability}"
-                    
-                if "moves" in team_data and len(moves_info) < 4:
-                    for move_name in team_data["moves"]:
-                        if len(moves_info) >= 4:
-                            break
-                        normalized_move_name = move_name.lower().replace(" ", "").translate(str.maketrans("", "", string.punctuation))
-                        if normalized_move_name not in known_moves:
-                            move_type = "Unknown"
-                            move_cat = "Unknown"
-                            move_pow = 0
-                            try:
-                                m = Move(normalized_move_name, gen=9)
-                                move_type = m.type.name.capitalize() if hasattr(m, 'type') and m.type else "Unknown"
-                                move_cat = m.category.name.capitalize() if hasattr(m, 'category') and m.category else "Unknown"
-                                move_pow = m.base_power if hasattr(m, 'base_power') else 0
-                            except Exception:
-                                pass
-                                
-                            if normalized_move_name not in self.move_effect:
-                                move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] Effect unknown"
-                            else:
-                                move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] {self.move_effect[normalized_move_name]}"
-                                
-                            ko_turns = None
-                            try:
-                                pseudo_id = normalized_move_name
-                                ko_result = self.turns_to_ko(battle, pseudo_id, attacker_is_opponent=True)
-                                if isinstance(ko_result, int):
-                                    ko_turns = ko_result
-                            except Exception:
-                                ko_turns = None
-                                
-                            ko_str = f" ({ko_turns} turns to KO your active pokemon)" if ko_turns is not None else ""
-                            moves_info.append(f"  * {move_name}{move_effect_str}{ko_str}")
-                            known_moves.append(normalized_move_name)
-
-        elif enhanced and self.bayesian_predictor and opponent:
+        if enhanced and self.bayesian_predictor and opponent:
             # TODO: maybe we should leave the try to avoid crashes
             # try:
             # Denormalize names for predictor
@@ -929,13 +828,8 @@ class PolimiBot(Player):
             calc_status = status_map.get(raw_status) if raw_status else None
             species_name = self.denormalize_pokemon_name(mon.species)
 
-            # Override with exact team data if available
             is_opponent = mon in battle.opponent_team.values()
-            team_source = None
-            if is_opponent:
-                team_source = self.get_known_opponent_team(battle)
-            else:
-                team_source = getattr(self, "team_json_data", None)
+            team_source = None if is_opponent else getattr(self, "team_json_data", None)
 
             mon_item = normalize_item(mon.item)
             mon_ability = mon.ability if mon.ability else None
@@ -1474,68 +1368,7 @@ class PolimiBot(Player):
             elif hasattr(pokemon, "terastallized") and pokemon.terastallized:
                 tera_type = "Active (unknown type)"
 
-            # Enhanced predictions
-            matched_team = None
-            if enhanced:
-                matched_team = self.get_known_opponent_team(battle)
-
-            if enhanced and matched_team:
-                normalized_species = self.denormalize_pokemon_name(species)
-                if normalized_species in matched_team:
-                    team_data = matched_team[normalized_species]
-                    
-                    if "tera" in team_data and tera_type == "Unknown":
-                        tera_type = team_data["tera"]
-                        
-                    if "item" in team_data and item_name == "unknown_item":
-                        best_item = team_data["item"]
-                        normalized_best_item = best_item.lower().replace(" ", "")
-                        item_effect = "" if normalized_best_item not in self.item_effect else f" ({self.item_effect[normalized_best_item]['effect']})"
-                        item_name = f"{best_item}"
-                        
-                    if "ability" in team_data and ability_name == "Unknown":
-                        best_ability = team_data["ability"]
-                        normalized_best_ability = best_ability.lower().replace(" ", "")
-                        ability_effect = "" if normalized_best_ability not in self.ability_effect else f" ({self.ability_effect[normalized_best_ability]['effect']})"
-                        ability_name = f"{best_ability}"
-                        
-                    if "moves" in team_data and len(moves_info) < 4:
-                        for move_name in team_data["moves"]:
-                            if len(moves_info) >= 4:
-                                break
-                            normalized_move_name = move_name.lower().replace(" ", "").translate(str.maketrans("", "", string.punctuation))
-                            if normalized_move_name not in known_moves:
-                                move_type = "Unknown"
-                                move_cat = "Unknown"
-                                move_pow = 0
-                                try:
-                                    m = Move(normalized_move_name, gen=9)
-                                    move_type = m.type.name.capitalize() if hasattr(m, 'type') and m.type else "Unknown"
-                                    move_cat = m.category.name.capitalize() if hasattr(m, 'category') and m.category else "Unknown"
-                                    move_pow = m.base_power if hasattr(m, 'base_power') else 0
-                                except Exception:
-                                    pass
-                                    
-                                if normalized_move_name not in self.move_effect:
-                                    move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] Effect unknown"
-                                else:
-                                    move_effect_str = f": [Type: {move_type}, Category: {move_cat}, Power: {move_pow}] {self.move_effect[normalized_move_name]}"
-                                
-                                ko_turns = None
-                                if battle.active_pokemon and status != "fainted":
-                                    try:
-                                        ko_result = self.turns_to_ko(
-                                            battle, normalized_move_name, attacker_is_opponent=True, attacker_pokemon=pokemon, defender_pokemon=battle.active_pokemon
-                                        )
-                                        if isinstance(ko_result, int):
-                                            ko_turns = ko_result
-                                    except Exception:
-                                        ko_turns = None
-                                ko_str = f" ({ko_turns} turns to KO your active pokemon)" if ko_turns is not None else ""
-                                moves_info.append(f"    * {move_name}{move_effect_str}{ko_str}")
-                                known_moves.append(normalized_move_name)
-                                
-            elif enhanced and self.bayesian_predictor:
+            if enhanced and self.bayesian_predictor:
                 normalized_species = self.denormalize_pokemon_name(species)
                 revealed_opponents = []
                 for p in battle.opponent_team.values():
@@ -1680,15 +1513,6 @@ class PolimiBot(Player):
         # Resolve ability / item — fall back to known opponent team data
         ability = (mon.ability or "").lower().replace(" ", "")
         item = (mon.item or "").lower().replace(" ", "")
-        if not is_player_side:
-            known = self.get_known_opponent_team(battle)
-            if known:
-                species = self.denormalize_pokemon_name(mon.species)
-                data = known.get(species, {})
-                if not ability and "ability" in data:
-                    ability = data["ability"].lower().replace(" ", "")
-                if item in ("", "unknown", "unknown_item") and "item" in data:
-                    item = data["item"].lower().replace(" ", "")
 
         # Item modifiers
         if item == "choicescarf":
@@ -1815,19 +1639,9 @@ class PolimiBot(Player):
                     opp_tera_type = "Unknown"
                 tera_prompt += f"* Opponent's {self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)} is currently terastallized (Type: {opp_tera_type})\n"
             elif opponent_can_tera:
-                opp_tera_type = "Unknown"
-                matched_team = self.get_known_opponent_team(battle)
-                if matched_team:
-                    species = self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)
-                    if species in matched_team and "tera" in matched_team[species]:
-                        opp_tera_type = matched_team[species]["tera"]
-                
-                if opp_tera_type != "Unknown":
-                    tera_prompt += f"* WARNING: Opponent can still terastallize this battle. Their {self.denormalize_pokemon_name(battle.opponent_active_pokemon.species)}'s tera type is likely {opp_tera_type}\n"
-                else:
-                    tera_prompt += (
-                        f"* WARNING: Opponent can still terastallize this battle\n"
-                    )
+                tera_prompt += (
+                    f"* WARNING: Opponent can still terastallize this battle\n"
+                )
 
         return tera_prompt
 
@@ -2148,20 +1962,7 @@ Provide your response in VALID JSON format with the following structure. IMPORTA
         if not active or not opponent_mon:
             return ""
 
-        # Build effective opponent move ID set: battle-revealed moves PLUS moves
-        # known from the team JSON (get_known_opponent_team). This fixes the case
-        # where the opponent's moves are visible in the prompt via team_json_data
-        # but haven't been used in battle yet, causing "no moves revealed yet".
         opp_move_ids: set[str] = set(opponent_mon.moves or {})
-        known_team = self.get_known_opponent_team(battle)
-        if known_team:
-            opp_species_key = self.denormalize_pokemon_name(opponent_mon.species)
-            opp_entry = known_team.get(opp_species_key, {})
-            for move_name in opp_entry.get("moves", []):
-                mid = move_name.lower().replace(" ", "").translate(
-                    str.maketrans("", "", string.punctuation)
-                )
-                opp_move_ids.add(mid)
 
         futures_map: dict = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
