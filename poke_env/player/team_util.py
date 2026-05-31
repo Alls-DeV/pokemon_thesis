@@ -118,13 +118,14 @@ class TeamSet(Teambuilder):
                 mon.nickname = mon.species
         return self.join_team(team)
 
-def get_metamon_teams(battle_format: str, set_name: str) -> TeamSet:
+def get_metamon_teams(battle_format: str, set_name: str, version: str = "v3") -> TeamSet:
     """
     Download a set of teams from huggingface (if necessary) and return a TeamSet.
 
     Args:
         battle_format: The battle format of the team files (e.g. "gen1ou", "gen2ubers", etc.).
         set_name: The name of the set of teams to download. See the README for options.
+        version: The huggingface revision to download.
     """
     if set_name not in {
         "competitive",
@@ -132,6 +133,7 @@ def get_metamon_teams(battle_format: str, set_name: str) -> TeamSet:
         "paper_variety",
         "modern_replays",
         "pokeagent_modern_replays",
+        "gl_05_26"
     }:
         raise ValueError(
             f"Invalid set name: {set_name}. Must be one of: competitive, paper_replays, paper_variety, modern_replays"
@@ -139,7 +141,7 @@ def get_metamon_teams(battle_format: str, set_name: str) -> TeamSet:
     if battle_format == "gen9vgc2025regi":
         path = 'bayesian_dataset'
     else:
-        path = download_teams(battle_format, set_name=set_name)
+        path = download_teams(battle_format, set_name=set_name, version=version)
     if not os.path.exists(path):
         raise ValueError(
             f"Cannot locate valid team directory for format {battle_format} at path {path}"
@@ -237,22 +239,26 @@ def get_llm_player(args,
     if name == 'abyssal':
         return AbyssalPlayer(battle_format=battle_format,
                             account_configuration=AccountConfiguration(f'{USERNAME}{PNUMBER1}', PASSWORD),
-                            server_configuration=server_config
+                            server_configuration=server_config,
+                            save_replays=args.log_dir
                             )
     elif name == 'max_power':
         return MaxBasePowerPlayer(battle_format=battle_format,
                             account_configuration=AccountConfiguration(f'{USERNAME}{PNUMBER1}', PASSWORD),
-                            server_configuration=server_config
+                            server_configuration=server_config,
+                            save_replays=args.log_dir
                             )
     elif name == 'random':
         return RandomPlayer(battle_format=battle_format,
                             account_configuration=AccountConfiguration(f'{USERNAME}{PNUMBER1}', PASSWORD),
-                            server_configuration=server_config
+                            server_configuration=server_config,
+                            save_replays=args.log_dir
                             )
     elif name == 'one_step':
         return OneStepPlayer(battle_format=battle_format,
                             account_configuration=AccountConfiguration(f'{USERNAME}{PNUMBER1}', PASSWORD),
-                            server_configuration=server_config
+                            server_configuration=server_config,
+                            save_replays=args.log_dir
                             )
     elif 'pokellmon' in name:
         if use_timeout and online:
