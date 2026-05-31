@@ -444,6 +444,40 @@ class AbyssalPlayer(Player):
     HP_FRACTION_COEFICIENT = 0.4
     SWITCH_OUT_MATCHUP_THRESHOLD = -2
 
+    def __init__(
+        self,
+        battle_format="gen9randombattle",
+        log_dir=None,
+        team=None,
+        save_replays=True,
+        account_configuration=None,
+        server_configuration=None,
+        **kwargs
+    ):
+        super().__init__(
+            battle_format=battle_format,
+            team=team,
+            save_replays=save_replays,
+            account_configuration=account_configuration,
+            server_configuration=server_configuration,
+            **kwargs
+        )
+
+    def _battle_finished_callback(self, battle: AbstractBattle):
+        super()._battle_finished_callback(battle)
+        if self._save_replays and getattr(self, "rename_replays", True):
+            import os
+            import uuid
+            
+            folder = "replays" if self._save_replays is True else str(self._save_replays)
+            old_path = os.path.join(folder, f"{self.username} - {battle.battle_tag}.html")
+            
+            if os.path.exists(old_path):
+                unique_id = uuid.uuid4().hex[:6]
+                new_name = f"abyssal_{unique_id}.html"
+                new_path = os.path.join(folder, new_name)
+                os.rename(old_path, new_path)
+
     def _estimate_matchup(self, mon: Pokemon, opponent: Pokemon):
         score = max([opponent.damage_multiplier(t) for t in mon.types if t is not None])
         score -= max(
