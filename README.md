@@ -54,7 +54,7 @@ Every LLM call receives a detailed state description covering:
 | System prompt | Role + per-Pokémon strategy from `polimi/strategies/` |
 | Side conditions | Hazards (Stealth Rock, Spikes, Toxic Spikes, Sticky Web) with HP costs on switch-in |
 | Active Pokémon | HP %, type, ability, item, status, stat boosts, all moves with `[Type / Category / Power]` + KO-turn count |
-| Opponent active | Same as above — unknown fields filled by Bayesian predictor or known team JSON |
+| Opponent active | Same as above — unknown fields (ability, item, tera type, unrevealed moves) filled by the Bayesian predictor |
 | Bench Pokémon | All non-active, non-fainted Pokémon on each side, full move lists, entry hazard costs |
 | Terastallization | Availability, active tera type, predicted opponent tera |
 | Speed order | Effective speed for both active Pokémon accounting for boosts, Choice Scarf, Iron Ball, paralysis, Swift Swim / Chlorophyll / Sand Rush / Slush Rush / Surge Surfer, Tailwind, Trick Room, Booster Energy / Protosynthesis / Quark Drive |
@@ -94,7 +94,7 @@ Special cases that bypass the full flow:
 
 ## Bayesian Predictor
 
-The predictor (`bayesian/`) infers unknown opponent fields — moves, item, ability, tera type, EV spread — from Gen 9 OU replay data and Smogon usage statistics.
+The predictor (`bayesian/`) infers unknown opponent fields — moves, item, ability, tera type, EV spread — from Gen 9 OU replay data and Smogon usage statistics. Its output is injected directly into the LLM prompt every turn: predicted moves fill the opponent's move list up to 4 slots (each with type, power, and KO-turn estimate), and the top-predicted item, ability, and tera type replace the corresponding "Unknown" fields in the opponent's description. This gives the LLM a complete picture of the opponent even before anything has been revealed in battle.
 
 ### Pipeline
 
